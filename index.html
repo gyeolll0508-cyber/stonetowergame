@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>사이버 돌탑 쌓기 · 충북대</title>
+  <meta name="description" content="충북대학교 캠퍼스를 거닐며 돌탑을 쌓고 소원을 비는 참여형 웹게임">
+  <meta name="theme-color" content="#cfe8b4">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪨</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="campus" aria-label="충북대학교 캠퍼스 지도"></canvas>
+
+  <!-- 상단 HUD -->
+  <header class="hud">
+    <div class="hud-col">
+      <div class="brand">🪨 사이버 돌탑</div>
+      <button id="myCard" class="my-card" type="button" title="내 돌탑 정보">
+        <div class="my-row"><span>내 최고</span><b id="myBest">-</b></div>
+        <div class="gauge sm"><i id="myGaugeFill"></i></div>
+        <small id="myGaugeLabel">돌탑을 쌓아 소원을 빌어요</small>
+      </button>
+    </div>
+    <div class="loc" id="locLabel">충북대학교 정문</div>
+    <div class="hud-col right">
+      <button id="profileChip" class="chip" type="button" title="이름·캐릭터 바꾸기">
+        <span id="profileDot" class="dot"></span><span id="profileName">이름 없음</span>
+      </button>
+      <div id="netBadge" class="badge">연결 중…</div>
+    </div>
+  </header>
+
+  <div class="zoom">
+    <button id="zoomIn" type="button" aria-label="확대">＋</button>
+    <button id="zoomOut" type="button" aria-label="축소">－</button>
+  </div>
+
+  <nav class="actionbar">
+    <button id="btnBuild" class="btn primary" type="button">🪨 여기에 돌탑 쌓기</button>
+    <button id="btnList" class="btn" type="button">📜 <span class="lbl">돌탑 </span>구경</button>
+    <button id="btnHelp" class="btn icon" type="button" aria-label="도움말">?</button>
+  </nav>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="backdrop" class="backdrop"></div>
+
+  <!-- 처음 방문 -->
+  <div id="mWelcome" class="layer modal" role="dialog" aria-labelledby="welcomeTitle">
+    <div class="modal-hero">🪨🌿🪨</div>
+    <h2 id="welcomeTitle">사이버 돌탑 쌓기</h2>
+    <p class="sub">충북대 캠퍼스를 거닐며 소원을 담아 돌탑을 쌓아요.<br>높이 쌓을수록 <b>소원 기원 게이지</b>가 차올라요!</p>
+    <label class="field">
+      <span>닉네임</span>
+      <input id="inName" maxlength="10" placeholder="예) 개신동 다람쥐" autocomplete="off">
+    </label>
+    <div class="field">
+      <span>캐릭터 색</span>
+      <div id="colorPick" class="swatches"></div>
+    </div>
+    <button id="btnStart" class="btn primary wide" type="button">캠퍼스 입장하기</button>
+  </div>
+
+  <!-- 소원 작성 -->
+  <div id="mWish" class="layer modal" role="dialog" aria-labelledby="wishTitle">
+    <h2 id="wishTitle">어떤 소원을 빌까요?</h2>
+    <div id="catPick" class="cats"></div>
+    <label class="field">
+      <span>소원 한 줄 <em id="wishCount">0/60</em></span>
+      <textarea id="inWish" maxlength="60" rows="2" placeholder="예) 이번 학기 전공 A+ 받게 해주세요!"></textarea>
+    </label>
+    <div class="row-btns">
+      <button id="btnWishCancel" class="btn" type="button">취소</button>
+      <button id="btnWishOk" class="btn primary" type="button">돌 쌓으러 가기</button>
+    </div>
+  </div>
+
+  <!-- 도움말 -->
+  <div id="mHelp" class="layer modal" role="dialog" aria-labelledby="helpTitle">
+    <h2 id="helpTitle">이렇게 놀아요</h2>
+    <ol class="help">
+      <li><b>이동</b> — 지도를 탭(클릭)하면 그곳으로 걸어가요. 꾹 누른 채 끌면 손가락을 따라가요. 키보드는 <kbd>WASD</kbd>/<kbd>방향키</kbd>.</li>
+      <li><b>돌탑 세우기</b> — 마음에 드는 잔디밭에서 <b>여기에 돌탑 쌓기</b>를 누르고 소원을 적어요. (한 사람당 돌탑 1개)</li>
+      <li><b>돌 쌓기</b> — 아래에서 돌 모양을 고르고, 위에서 움직이는 돌을 <b>탭</b>해서 떨어뜨려요. (<kbd>Space</kbd>, 숫자키 <kbd>1~7</kbd>)</li>
+      <li><b>균형</b> — 위에 올린 돌들의 무게중심이 아랫돌 위를 벗어나면 와르르! 둥근돌·뾰족돌은 그 위에 쌓기 어려워요.</li>
+      <li><b>난이도</b> — 높아질수록 돌이 빨라지고, 4층부터 바람, 12층부터 손떨림이 생겨요.</li>
+      <li><b>기록</b> — 최고 기록이 캠퍼스의 내 돌탑이 되고, <b>15층</b>이면 소원 기원 게이지 100%!</li>
+      <li><b>응원</b> — 다른 사람의 돌탑을 눌러 소원을 보고 ♥ 좋아요와 응원 한마디를 남겨요.</li>
+    </ol>
+    <button id="btnHelpClose" class="btn primary wide" type="button">알겠어요!</button>
+  </div>
+
+  <!-- 돌탑 상세 -->
+  <aside id="sTower" class="layer sheet" aria-labelledby="twName">
+    <div class="sheet-grab"></div>
+    <button class="sheet-close" data-close type="button" aria-label="닫기">✕</button>
+    <div class="tw-head">
+      <span id="twCat" class="cat-badge"></span>
+      <span id="twMine" class="mine-badge" hidden>내 돌탑</span>
+      <span id="twDemo" class="demo-badge" hidden>예시</span>
+    </div>
+    <h2 id="twName" class="tw-name"></h2>
+    <p id="twWish" class="tw-wish"></p>
+    <div class="tw-stats">
+      <div><small>최고 높이</small><b id="twHeight">0층</b></div>
+      <div class="grow">
+        <small>소원 기원 게이지</small>
+        <div class="gauge"><i id="twGaugeFill"></i></div>
+        <small id="twGaugeLabel"></small>
+      </div>
+    </div>
+    <div class="tw-actions">
+      <button id="twLike" class="btn like" type="button">♡ <span id="twLikeCount">0</span></button>
+      <div id="twOwner" class="owner-actions" hidden>
+        <button id="btnRestack" class="btn primary" type="button">🪨 다시 쌓기</button>
+        <button id="btnEditWish" class="btn" type="button">✏️ 소원 수정</button>
+      </div>
+    </div>
+    <h3>💬 응원 한마디</h3>
+    <div id="quickCheers" class="quick"></div>
+    <form id="cheerForm" class="cheer-form">
+      <input id="inCheer" maxlength="40" placeholder="따뜻한 응원을 남겨 주세요" autocomplete="off">
+      <button class="btn primary" type="submit">보내기</button>
+    </form>
+    <ul id="twCheers" class="cheers"></ul>
+    <p id="twTime" class="muted small"></p>
+  </aside>
+
+  <!-- 돌탑 목록 -->
+  <aside id="sList" class="layer sheet" aria-labelledby="listTitle">
+    <div class="sheet-grab"></div>
+    <button class="sheet-close" data-close type="button" aria-label="닫기">✕</button>
+    <h2 id="listTitle">📜 캠퍼스 돌탑</h2>
+    <p id="listSummary" class="muted small"></p>
+    <div id="listTabs" class="tabs">
+      <button data-sort="height" class="on" type="button">🏆 높이순</button>
+      <button data-sort="likes" type="button">♥ 좋아요순</button>
+      <button data-sort="recent" type="button">🕒 최신순</button>
+    </div>
+    <div id="listCats" class="quick"></div>
+    <ol id="listItems" class="tower-list"></ol>
+  </aside>
+
+  <!-- 돌 쌓기 화면 -->
+  <section id="stackScene" class="stack-scene" hidden>
+    <canvas id="stackCanvas"></canvas>
+    <div class="stack-hud">
+      <div class="hud-card big"><small>현재</small><b><span id="skHeight">0</span>층</b></div>
+      <div class="hud-card"><small>최고</small><b><span id="skBest">0</span>층</b></div>
+      <div class="hud-card grow">
+        <div class="hud-line"><span id="skLevel">Lv.1</span><span id="skWind">🍃 바람 없음</span></div>
+        <small>안정도</small>
+        <div class="gauge sm"><i id="skStab"></i></div>
+      </div>
+    </div>
+    <div id="skWish" class="sk-wish"></div>
+    <div id="skTip" class="sk-tip">화면을 탭하면 돌이 떨어져요 👇</div>
+    <div id="skBottom" class="stack-bottom">
+      <div id="skTray" class="tray"></div>
+      <div class="stack-actions">
+        <button id="skExit" class="btn" type="button">← 캠퍼스로</button>
+        <button id="skFinish" class="btn primary" type="button">✅ 완성하고 기록하기</button>
+      </div>
+    </div>
+    <div id="skResult" class="result" hidden>
+      <div class="result-card">
+        <div id="rsEmoji" class="result-emoji">🪨</div>
+        <h2 id="rsTitle"></h2>
+        <div class="result-stats">
+          <div><small>이번 기록</small><b id="rsHeight">0층</b></div>
+          <div><small>최고 기록</small><b id="rsBest">0층</b></div>
+        </div>
+        <div id="rsRecord" class="record-badge" hidden>🎉 새 최고 기록!</div>
+        <small>소원 기원 게이지</small>
+        <div class="gauge"><i id="rsGaugeFill"></i></div>
+        <small id="rsGaugeLabel"></small>
+        <p id="rsNote" class="muted small"></p>
+        <div class="row-btns">
+          <button id="rsExit" class="btn" type="button">캠퍼스로</button>
+          <button id="rsRetry" class="btn primary" type="button">🔁 다시 도전</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script src="js/data.js"></script>
+  <script src="js/stones.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/campus.js"></script>
+  <script src="js/stack.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
