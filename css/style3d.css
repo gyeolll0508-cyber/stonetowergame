@@ -1,0 +1,96 @@
+/* =========================================================
+ * style3d.css — 3D 버전에만 쓰는 추가 스타일
+ *  (기본 디자인은 style.css를 그대로 사용)
+ * ========================================================= */
+
+body { background: #dde8ec; }
+
+/* 3D 이름표 레이어: 캔버스 위, HUD 아래 */
+#labels3d {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+}
+body.stacking #labels3d { display: none; }
+
+.lb3 {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 2px 9px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 253, 246, .92);
+  box-shadow: 0 2px 0 var(--line);
+  font-family: 'Jua', sans-serif;
+  font-size: 12px;
+  white-space: nowrap;
+  will-change: transform;
+}
+.lb3.place { background: #b98654; color: #fff8e8; font-size: 13px; text-shadow: 0 1px 0 rgba(0,0,0,.25); }
+.lb3.plaza { background: #8a5a3c; }
+.lb3.tower.mine { background: #ffe2a8; }
+.lb3.me { background: var(--primary-2); font-size: 13px; }
+.lb3.npc { font-size: 11px; opacity: .85; border-width: 1.5px; }
+
+/* 시점 회전 버튼 (확대·축소 버튼과 같은 모양) */
+.zoom .rot { font-size: 20px; }
+
+/* 2D ↔ 3D 전환 링크 */
+.mode-link {
+  position: fixed;
+  left: 12px;
+  bottom: calc(86px + var(--safe-bottom));
+  z-index: 10;
+  padding: 6px 12px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--line);
+  color: var(--ink);
+  font-family: 'Jua', sans-serif;
+  font-size: 13px;
+  text-decoration: none;
+}
+body.stacking .mode-link { display: none; }
+
+/* 3D 돌 쌓기: 떠오르는 글자(+1층, 아슬아슬!)와 15층 별 */
+.sk3d-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.sk3d-pop, .sk3d-star {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-family: 'Jua', sans-serif;
+  font-size: 22px;
+  white-space: nowrap;
+  -webkit-text-stroke: 5px rgba(255, 255, 255, .9);
+  paint-order: stroke fill;
+  will-change: transform;
+}
+.sk3d-star { font-size: 26px; -webkit-text-stroke: 0; }
+
+/* 처음 불러오는 동안 */
+.loading3d {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  background: linear-gradient(#cfe3f1, #e7efe2);
+  text-align: center;
+  font-family: 'Jua', sans-serif;
+  font-size: 20px;
+  color: var(--ink);
+  transition: opacity .5s;
+}
+.loading3d .spin { font-size: 44px; animation: bob 1.2s ease-in-out infinite; }
+.loading3d small { font-family: 'Gowun Dodum', sans-serif; font-size: 13px; color: var(--muted); }
+.loading3d.done { opacity: 0; pointer-events: none; }

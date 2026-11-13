@@ -69,7 +69,24 @@
 
   function refreshNet() {
     const b = $('netBadge');
-    if (Store.isPersistent()) {
+    const online = Store.onlineStatus ? Store.onlineStatus() : 'off';
+    if (online === 'online') {
+      b.textContent = '🌐 모두와 공유 중';
+      b.className = 'badge ok';
+      b.title = '돌탑이 서버에 저장되고 다른 사람의 돌탑도 함께 보여요.';
+    } else if (online === 'connecting') {
+      b.textContent = '연결 중…';
+      b.className = 'badge';
+      b.title = '서버에 연결하고 있어요.';
+    } else if (online === 'readonly') {
+      b.textContent = '👀 구경만 가능 · 내 기기에 저장';
+      b.className = 'badge warn';
+      b.title = '다른 사람의 돌탑은 보이지만, 로그인이 안 돼서 내 돌탑은 이 브라우저에만 저장돼요.';
+    } else if (online === 'offline') {
+      b.textContent = '⚠️ 오프라인 · 내 기기에 저장';
+      b.className = 'badge warn';
+      b.title = '서버에 연결하지 못했어요. 기록은 이 브라우저에 저장되고, 연결되면 다시 올려요.';
+    } else if (Store.isPersistent()) {
       b.textContent = '💾 내 기기에 저장';
       b.className = 'badge ok';
       b.title = '기록은 이 브라우저에 저장돼요(서버 없이 동작).';
@@ -428,6 +445,8 @@
     if (p) Campus.setPlayer(p.name, p.color);
     refreshHud();
     refreshNet();
+    // 서버에서 다른 사람의 돌탑을 받아 오면 캠퍼스·배지를 다시 그려요
+    if (Store.onChange) Store.onChange(function () { refreshHud(); refreshNet(); });
     if (!p) openWelcome();
   }
 
