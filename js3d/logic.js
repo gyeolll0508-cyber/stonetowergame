@@ -48,9 +48,36 @@ export function onRoad(px, py, pad) {
   return DATA.ROADS.some(function (r) { return distToSeg(px, py, r) < r.w / 2 + (pad || 0); });
 }
 
+// 걸어 다닐 수 있는 캠퍼스 범위 = 생울타리 바로 안쪽
+//  울타리(world.js addHedges)는 가장자리에서 6~18px 사이에 있고, 캐릭터 몸 반지름이 약 4px라서
+//  이 선에서 멈추면 몸이 울타리에 딱 닿아 보여요. (예전엔 북쪽이 울타리 2m 앞에서 멈췄어요)
+export const BOUND = { x1: 24, y1: 24, x2: W - 24, y2: H - 18 };
+
+// 생울타리 직사각형들 [x1, y1, x2, y2] (게임 px). 3D 울타리(world.js)와 지도(mapui.js)가 같이 써요.
+//  울타리 가운데 선: 위 y=12 · 아래 y=H-8 · 왼쪽 x=12 · 오른쪽 x=W-12, 두께 t(기본 12px = 1.2m)
+//  네 모서리는 위·아래 울타리가 덮고, 양옆 울타리는 그 사이만 채워서 겹치거나 삐져나오지 않아요.
+//  아래쪽은 정문 앞이 비어 있어요 (그 자리는 차단봉).
+export function hedgeRects(t) {
+  const h = (t || 12) / 2;
+  const gate = DATA.PLACES.find(function (p) { return p.type === 'gate'; });
+  const xl = 12, xr = W - 12, yt = 12, yb = H - 8;
+  return [
+    [xl - h, yt - h, xr + h, yt + h],                       // 위
+    [xl - h, yb - h, gate.x - 10, yb + h],                  // 아래 (정문 왼쪽)
+    [gate.x + gate.w + 10, yb - h, xr + h, yb + h],         // 아래 (정문 오른쪽)
+    [xl - h, yt + h, xl + h, yb - h],                       // 왼쪽
+    [xr - h, yt + h, xr + h, yb - h]                        // 오른쪽
+  ];
+}
+
+// 캠퍼스(울타리) 밖인가?
+export function outside(px, py) {
+  return px < BOUND.x1 || py < BOUND.y1 || px > BOUND.x2 || py > BOUND.y2;
+}
+
 // 걸어갈 수 없는 곳인가?
 export function blocked(px, py) {
-  if (px < 24 || py < 40 || px > W - 24 || py > H - 16) return true;
+  if (outside(px, py)) return true;
   for (let i = 0; i < DATA.PLACES.length; i++) {
     const p = DATA.PLACES[i];
     if (p.type === 'building') {
