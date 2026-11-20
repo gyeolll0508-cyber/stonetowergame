@@ -9,6 +9,7 @@
  * ========================================================= */
 import * as THREE from 'three';
 import { makeStone, noise } from './actors.js';
+import { TONES, validTone, paintStone } from './tones.js';
 import * as TX from './textures.js';
 
 const DATA = window.DATA, STONES = window.STONES, Store = window.Store;
@@ -94,7 +95,56 @@ function stoneMesh(type, seed) {
   const m = makeStone(type.id === 'base' ? 'base' : type.id, seed);
   m.scale.set(type.w * K, type.h * K, depthPx(type) * K);
   m.rotation.y = ((seed * 0.37) % 0.3) - 0.15; // 돌마다 살짝 다른 방향
+  m.userData.baseMat = m.material;             // 자연석톤(원래 색)으로 되돌릴 때 사용
   return m;
+}
+
+/* ---------------- 돌탑 꾸미기: 색상 테마 ----------------
+ *  색표는 js3d/tones.js (캠퍼스 돌탑과 같은 색).
+ *  "꾸미기 완료"를 누르면 내 돌탑에 테마를 저장해요(Store.setTone → Supabase).
+ * ------------------------------------------------------- */
+let tone = 'natural';
+let decorating = false;
+
+// 지금 화면에 있는 돌(쌓인 돌 + 떨어진 돌) 전체에 테마 적용 (받침돌 = 0층은 원래 색)
+function applyTone(id) {
+  tone = validTone(id);
+  stack.forEach(function (s, i) { paintStone(s.mesh, tone, i); });
+  debris.forEach(function (d, i) { paintStone(d.mesh, tone, stack.length + i); });
+  if (el && el.tones) {
+    Array.prototype.forEach.call(el.tones.children, function (b) {
+      b.classList.toggle('on', b.dataset.tone === tone);
+    });
+  }
+}
+
+function openDecor() {
+  if (state !== 'result' || height() + debris.length < 1) return;
+  decorating = true;
+  el.result.hidden = true;
+  el.decor.hidden = false;
+  el.scene.classList.add('decorating');
+  // 이미 저장해 둔 테마가 있으면 그 테마로 시작
+  if (tone === 'natural' && tower && tower.tone) applyTone(tower.tone);
+  resize();
+  const on = el.tones.querySelector('.tone-btn.on');
+  if (on) on.focus();
+}
+
+function closeDecor() {
+  if (!decorating) return;
+  decorating = false;
+  el.decor.hidden = true;
+  el.scene.classList.remove('decorating');
+  el.result.hidden = false;
+  resize();
+  // 내 돌탑에 테마 저장 → 캠퍼스·다른 사람 화면에도 같은 색으로 보여요
+  const before = validTone(tower && tower.tone);
+  if (tower && Store.setTone) Store.setTone(tower.id, tone);
+  if (tone !== before || tone !== 'natural') {
+    toast(tone === 'natural' ? '🪨 자연석톤으로 되돌렸어요' : '🎨 ' + TONES[tone].name + '으로 꾸몄어요! 캠퍼스 돌탑에도 보여요');
+  }
+  setTimeout(function () { el.rsDecorate.focus(); }, 50);
 }
 
 // 2D 좌표(x, 중심 y) → 3D 위치 (2D는 위쪽이 음수, 3D는 위쪽이 +)
@@ -254,6 +304,7 @@ function showResult(reason) {
   el.rsGaugeFill.style.width = gauge.pct + '%';
   el.rsGaugeLabel.textContent = gauge.label;
   el.rsNote.textContent = note;
+  el.rsDecorate.hidden = stack.length + debris.length < 2; // 꾸밀 돌이 있을 때만
   el.result.hidden = false;
   el.skBest.textContent = res.best;
   if (mover) { disposeMesh(mover.mesh); mover = null; }
@@ -695,7 +746,7 @@ function resize() {
   if (!renderer) return;
   vw = window.innerWidth; vh = window.innerHeight;
   renderer.setSize(vw, vh);
-  bottomPad = (el.bottom.offsetHeight || 150) + 10;
+  bottomPad = ((decorating ? el.decor : el.bottom).offsetHeight || 150) + 10;
   topPad = (el.scene.querySelector('.stack-hud').offsetHeight || 60) + 30;
   camera.aspect = vw / vh;
   // HUD와 돌 트레이 사이 빈 공간의 가운데에 탑이 오게 화면 중심을 옮겨요
@@ -713,7 +764,17 @@ function clearScene() {
   stack = []; debris = []; dust = []; leaves = []; popups = []; mover = null;
 }
 
+function endDecor() {
+  // 새 판·캠퍼스로 나갈 때: 꾸미기 바를 닫고 자연석톤으로 되돌려요(저장하지 않음)
+  decorating = false;
+  el.decor.hidden = true;
+  el.scene.classList.remove('decorating');
+  tone = 'natural';
+  applyTone('natural');
+}
+
 function reset() {
+  endDecor();
   clearScene();
   const base = { type: BASE, x: 0, yb: 0, seed: 0, mesh: stoneMesh(BASE, 0) };
   base.mesh.rotation.y = 0.05;
@@ -740,6 +801,7 @@ function close() {
   }
   running = false;
   cancelAnimationFrame(rafId);
+  endDecor();
   clearScene();
   el.scene.hidden = true;
   document.body.classList.remove('stacking');
@@ -750,6 +812,12 @@ function onKey(e) {
   if (!running) return;
   const tg = e.target;
   if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA')) return;
+  if (decorating) {
+    // 꾸미기 중: 1~3 테마 고르기, Esc 꾸미기 완료 (Enter/Space는 누른 버튼에 맡김)
+    if (/^(Digit|Numpad)[1-3]$/.test(e.code)) applyTone(['natural', 'pastel', 'rainbow'][parseInt(e.code.slice(-1), 10) - 1]);
+    else if (e.code === 'Escape') closeDecor();
+    return;
+  }
   if (state === 'result') {
     if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); reset(); }
     else if (e.code === 'Escape') close();
@@ -768,7 +836,8 @@ function init() {
     skHeight: $('skHeight'), skBest: $('skBest'), skLevel: $('skLevel'), skWind: $('skWind'), skStab: $('skStab'),
     wish: $('skWish'), tip: $('skTip'), result: $('skResult'),
     rsEmoji: $('rsEmoji'), rsTitle: $('rsTitle'), rsHeight: $('rsHeight'), rsBest: $('rsBest'), rsRecord: $('rsRecord'),
-    rsGaugeFill: $('rsGaugeFill'), rsGaugeLabel: $('rsGaugeLabel'), rsNote: $('rsNote'), rsRetry: $('rsRetry'), rsExit: $('rsExit')
+    rsGaugeFill: $('rsGaugeFill'), rsGaugeLabel: $('rsGaugeLabel'), rsNote: $('rsNote'), rsRetry: $('rsRetry'), rsExit: $('rsExit'),
+    rsDecorate: $('rsDecorate'), decor: $('skDecor'), tones: $('skTones')
   };
   const mobile = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 700;
   renderer = new THREE.WebGLRenderer({ canvas: el.canvas, antialias: true, powerPreference: 'high-performance' });
@@ -797,6 +866,12 @@ function init() {
   $('skExit').addEventListener('click', close);
   el.rsRetry.addEventListener('click', reset);
   el.rsExit.addEventListener('click', close);
+  el.rsDecorate.addEventListener('click', openDecor);
+  $('skDecorDone').addEventListener('click', closeDecor);
+  el.tones.addEventListener('click', function (e) {
+    const b = e.target.closest('.tone-btn');
+    if (b) applyTone(b.dataset.tone);
+  });
   window.addEventListener('keydown', onKey);
   window.addEventListener('resize', function () { if (running) resize(); });
 }
@@ -828,7 +903,11 @@ const Stack = {
   isActive: function () { return running; },
   // 테스트·디버그용(읽기 전용) 상태 확인
   debug: function () {
-    return { state: state, x: mover ? mover.x : null, height: height(), margin: minMargin, wind: wind, debris: debris.length };
+    return {
+      state: state, x: mover ? mover.x : null, height: height(), margin: minMargin, wind: wind, debris: debris.length,
+      tone: tone, decorating: decorating,
+      colors: stack.map(function (s) { return '#' + s.mesh.material.color.getHexString(); })
+    };
   }
 };
 

@@ -76,6 +76,51 @@ body.stacking .mode-link { display: none; }
 }
 .sk3d-star { font-size: 26px; -webkit-text-stroke: 0; }
 
+/* 돌탑 꾸미기: 색상 테마 바 (돌 트레이와 같은 모양) */
+.decor-bar {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 6;
+  padding: 10px 10px calc(12px + var(--safe-bottom));
+  border-top: 3px solid var(--line);
+  border-radius: 22px 22px 0 0;
+  background: rgba(255, 253, 246, .96);
+  text-align: center;
+  animation: fadeIn .25s;
+}
+.decor-title { margin-bottom: 8px; font-family: 'Jua', sans-serif; font-size: 16px; }
+.decor-tones { display: flex; gap: 8px; justify-content: center; margin-bottom: 10px; }
+.tone-btn {
+  display: flex;
+  flex: 1;
+  max-width: 130px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 3px 0 var(--line);
+  font-family: 'Jua', sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform .1s, background .1s;
+}
+.tone-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+.tone-btn.on { background: #fff0c9; transform: translateY(-3px); box-shadow: 0 5px 0 var(--line); border-color: #b9671b; }
+.tone-btn:focus-visible { outline: 3px solid #6c9ef0; outline-offset: 2px; }
+.tone-swatch {
+  width: 46px;
+  height: 22px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+}
+.tone-swatch.natural { background: linear-gradient(90deg, #bdb5a8, #9fa8aa, #c6bca7, #a49e93); }
+.tone-swatch.pastel { background: linear-gradient(90deg, #f6c1cf, #bfe3f7, #d9c8f0, #bfeedd, #fde7b0); }
+.tone-swatch.rainbow { background: linear-gradient(90deg, #ff6b6b, #ffa94d, #ffd43b, #69db7c, #4dabf7, #5c7cfa, #b197fc); }
+.stack-scene.decorating .stack-bottom { display: none; }
+
 /* 처음 불러오는 동안 */
 .loading3d {
   position: fixed;
