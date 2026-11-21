@@ -8,11 +8,13 @@
  *   - WASD/방향키: 이동(카메라 기준) · Q/E: 시점 회전
  *   - 오른쪽 버튼 드래그 / 두 손가락: 시점 회전·확대
  *   - 휠 / ＋－ 버튼: 확대·축소
+ *   - M / 미니맵 누르기: 전체 지도 (mapui.js)
  * ========================================================= */
 import * as THREE from 'three';
 import * as L from './logic.js';
 import { buildWorld } from './world.js';
 import { makeTower, makeCharacter } from './actors.js';
+import * as MapUI from './mapui.js';
 
 const DATA = window.DATA;
 const Store = window.Store;
@@ -79,6 +81,7 @@ function updateLabels() {
 
 function moveChar(c, dx, dy) {
   const nx = c.x + dx, ny = c.y + dy;
+  if (c === player && L.outside(nx, ny)) MapUI.edgeWarn(); // 캠퍼스 끝에 막힘 → 안내
   if (!L.blocked(nx, ny)) { c.x = nx; c.y = ny; return true; }
   if (dx && !L.blocked(nx, c.y)) { c.x = nx; return true; }
   if (dy && !L.blocked(c.x, ny)) { c.y = ny; return true; }
@@ -238,6 +241,7 @@ function loop(t) {
   update(dt);
   renderer.render(scene, camera);
   updateLabels();
+  MapUI.frame();
   if (firstFrame) {
     firstFrame = false;
     document.body.classList.add('ready3d');
@@ -265,8 +269,10 @@ function towerAtScreen(clientX, clientY) {
 }
 
 function setTarget(p) {
-  player.tx = Math.max(30, Math.min(L.W - 30, p.x));
-  player.ty = Math.max(50, Math.min(L.H - 20, p.y));
+  const b = L.BOUND;
+  if (L.outside(p.x, p.y)) MapUI.edgeWarn(); // 울타리 밖을 눌렀어요
+  player.tx = Math.max(b.x1 + 6, Math.min(b.x2 - 6, p.x));
+  player.ty = Math.max(b.y1 + 6, Math.min(b.y2 - 6, p.y));
   player.stuck = 0;
 }
 
@@ -482,6 +488,17 @@ const Campus = {
     if (rl) rl.addEventListener('click', function () { cam.yawT += Math.PI / 4; });
     if (rr) rr.addEventListener('click', function () { cam.yawT -= Math.PI / 4; });
 
+    // 미니맵·전체 지도·경계 안내 (mapui.js)
+    MapUI.init({
+      state: function () {
+        return {
+          x: player.x, y: player.y, heading: player.heading, yaw: cam.yaw, color: player.color,
+          towers: towerList.length ? towerList : Store.towers()
+        };
+      },
+      canOpen: function () { return running && !(opts.blockKeys && opts.blockKeys()); }
+    });
+
     syncTowers(Store.towers());
     Campus.resume();
   },
@@ -518,6 +535,7 @@ const Campus = {
 
   pause: function () {
     running = false;
+    MapUI.closeFull();
     cancelAnimationFrame(rafId);
     Object.keys(keys).forEach(function (k) { keys[k] = false; });
     pointers.clear();
