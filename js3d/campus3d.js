@@ -511,6 +511,41 @@ const Campus = {
 
   highlight: function (id) { highlightId = id; },
 
+  // 해당 위치의 장소 이름 (예: "중앙도서관 앞")
+  locationOf: function (x, y) { return L.locationName(x, y); },
+
+  // 게임 좌표 → 화면 좌표(px). 카메라 뒤쪽이면 behind = true
+  screenPos: function (x, y) {
+    if (!camera) return null;
+    const p = L.toV3(x, y);
+    tmpV.set(p.x, 1.5, p.z).project(camera);
+    const behind = tmpV.z > 1;
+    const sx = behind ? -tmpV.x : tmpV.x, sy = behind ? -tmpV.y : tmpV.y;
+    return { x: (sx + 1) / 2 * window.innerWidth, y: (1 - sy) / 2 * window.innerHeight, behind: behind };
+  },
+
+  // 플레이어를 (x, y) 근처의 걸을 수 있는 곳으로 순간이동 (카메라 쪽에 서서 돌탑을 바라봐요)
+  teleport: function (x, y) {
+    const pref = Math.atan2(Math.cos(cam.yaw), Math.sin(cam.yaw)); // 게임 좌표에서 카메라가 있는 방향
+    const dists = [40, 55, 75, 100, 130];
+    let spot = { x: x, y: y };
+    search:
+    for (let i = 0; i < dists.length; i++) {
+      for (let k = 0; k < 16; k++) {
+        const a = pref + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 8;
+        const px = x + Math.cos(a) * dists[i], py = y + Math.sin(a) * dists[i];
+        if (!L.blocked(px, py)) { spot = { x: px, y: py }; break search; }
+      }
+    }
+    player.x = spot.x; player.y = spot.y;
+    player.tx = player.ty = null;
+    player.moving = false;
+    player.heading = Math.atan2(x - spot.x, y - spot.y);
+    Object.keys(keys).forEach(function (k) { keys[k] = false; });
+    cam.free = false;
+    return spot;
+  },
+
   canBuildHere: function (ignoreId) {
     const list = towerList.length ? towerList : Store.towers();
     return L.canBuild(player.x, player.y, list, trees, ignoreId);

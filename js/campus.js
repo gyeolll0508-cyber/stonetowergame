@@ -544,7 +544,7 @@
     if (tapMark) { tapMark.life -= dt * 1.4; if (tapMark.life <= 0) tapMark = null; }
 
     // 현재 위치 이름
-    const loc = locationName();
+    const loc = locationName(player.x, player.y);
     if (loc !== lastLoc) { lastLoc = loc; if (opts.onLocation) opts.onLocation(loc); }
   }
 
@@ -554,20 +554,33 @@
     if (hh * 2 >= H) cam.y = H / 2; else cam.y = Math.max(hh - 80, Math.min(H - hh + 40, cam.y));
   }
 
-  function locationName() {
+  function locationName(px, py) {
     let best = null, bd = 1e9;
     DATA.PLACES.forEach(function (p) {
       let d;
-      if (p.type === 'pond') d = Math.max(0, Math.hypot((player.x - (p.x + p.w / 2)) / (p.w / 2), (player.y - (p.y + p.h / 2)) / (p.h / 2)) - 1) * p.w / 2;
-      else d = distToRect(player.x, player.y, p);
+      if (p.type === 'pond') d = Math.max(0, Math.hypot((px - (p.x + p.w / 2)) / (p.w / 2), (py - (p.y + p.h / 2)) / (p.h / 2)) - 1) * p.w / 2;
+      else d = distToRect(px, py, p);
       if (d < bd) { bd = d; best = p; }
     });
     if (!best) return '충북대학교 캠퍼스';
     if (best.type === 'field' && bd === 0) return best.name;
     if (best.type === 'gate' && bd < 180) return best.name;
     if (bd < 120) return best.name + ' 앞';
-    if (onRoad(player.x, player.y)) return '캠퍼스 산책로';
+    if (onRoad(px, py)) return '캠퍼스 산책로';
     return '충북대학교 잔디밭';
+  }
+
+  // (x, y) 주변에서 걸을 수 있는 자리 찾기 (pref 방향을 먼저 시도)
+  function nearSpot(x, y, pref) {
+    const dists = [48, 64, 84, 110, 140];
+    for (let i = 0; i < dists.length; i++) {
+      for (let k = 0; k < 16; k++) {
+        const a = pref + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 8;
+        const px = x + Math.cos(a) * dists[i], py = y + Math.sin(a) * dists[i];
+        if (!blocked(px, py)) return { x: px, y: py };
+      }
+    }
+    return { x: x, y: y };
   }
 
   function loop(t) {
@@ -711,6 +724,25 @@
     },
 
     highlight: function (id) { highlightId = id; },
+
+    // 해당 위치의 장소 이름 (예: "중앙도서관 앞")
+    locationOf: function (x, y) { return locationName(x, y); },
+
+    // 게임 좌표 → 화면 좌표(px)
+    screenPos: function (x, y) {
+      return { x: (x - cam.x) * cam.zoom + vw / 2, y: (y - 30 - cam.y) * cam.zoom + vh / 2, behind: false };
+    },
+
+    // 플레이어를 (x, y) 근처의 걸을 수 있는 곳으로 순간이동
+    teleport: function (x, y) {
+      const spot = nearSpot(x, y, Math.PI / 2);
+      player.x = spot.x; player.y = spot.y;
+      player.tx = player.ty = null;
+      player.moving = false;
+      Object.keys(keys).forEach(function (k) { keys[k] = false; });
+      cam.free = false;
+      return spot;
+    },
 
     // 현재 위치에 돌탑을 세울 수 있는지
     canBuildHere: function (ignoreId) {

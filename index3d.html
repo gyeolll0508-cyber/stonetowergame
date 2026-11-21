@@ -56,9 +56,15 @@
 
   <nav class="actionbar">
     <button id="btnBuild" class="btn primary" type="button">🪨 여기에 돌탑 쌓기</button>
+    <button id="btnGoMine" class="btn go-mine" type="button" title="내 돌탑 앞으로 바로 이동 (M)" hidden>📍 <span class="lbl">내 돌탑으로 이동</span><span class="lbl-s">내 돌탑</span></button>
     <button id="btnList" class="btn" type="button">📜 <span class="lbl">돌탑 </span>구경</button>
     <button id="btnHelp" class="btn icon" type="button" aria-label="도움말">?</button>
   </nav>
+
+  <!-- 내 돌탑이 화면 밖에 있을 때 가장자리에 방향 표시 -->
+  <button id="myArrow" class="my-arrow" type="button" aria-label="내 돌탑 방향 (누르면 이동)" hidden>
+    <span class="arr">➤</span><span id="myArrowText" class="txt">⭐ 내 돌탑</span>
+  </button>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="backdrop" class="backdrop"></div>
@@ -104,6 +110,7 @@
       <li><b>균형</b> — 위에 올린 돌들의 무게중심이 아랫돌 위를 벗어나면 와르르! 둥근돌·뾰족돌은 그 위에 쌓기 어려워요.</li>
       <li><b>난이도</b> — 높아질수록 돌이 빨라지고, 4층부터 바람, 12층부터 손떨림이 생겨요.</li>
       <li><b>기록</b> — 최고 기록이 캠퍼스의 내 돌탑이 되고, <b>15층</b>이면 소원 기원 게이지 100%!</li>
+      <li><b>내 돌탑 찾기</b> — 내 돌탑이 화면 밖에 있으면 가장자리의 ⭐ 화살표가 방향과 거리를 알려 줘요. 아래 <b>📍 내 돌탑으로 이동</b>(<kbd>M</kbd>)을 누르면 바로 앞으로 이동해요.</li>
       <li><b>응원</b> — 다른 사람의 돌탑을 눌러 소원을 보고 ♥ 좋아요와 응원 한마디를 남겨요.</li>
     </ol>
     <button id="btnHelpClose" class="btn primary wide" type="button">알겠어요!</button>
@@ -120,6 +127,7 @@
     </div>
     <h2 id="twName" class="tw-name"></h2>
     <p id="twWish" class="tw-wish"></p>
+    <p id="twLoc" class="tw-loc"></p>
     <div class="tw-stats">
       <div><small>최고 높이</small><b id="twHeight">0층</b></div>
       <div class="grow">
