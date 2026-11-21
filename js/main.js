@@ -620,8 +620,7 @@
         return;
       }
       if (e.key === 'Escape' && !Stack.isActive()) closeLayers();
-      const tg = e.target;
-      const typing = tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA' || tg.isContentEditable);
+ 
       if (e.code === 'KeyM' && !typing && !anyLayerOpen() && !Stack.isActive() && Store.myTower()) goToMine();
     });
   }
