@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/style3d.css">
+  <link rel="stylesheet" href="css/style.css?v=2026112105">
+  <link rel="stylesheet" href="css/style3d.css?v=2026112105">
   <!-- Three.js를 인터넷(CDN)에서 불러와요. import 'three' → 아래 주소 -->
   <script type="importmap">
     { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
@@ -50,14 +50,18 @@
   <div class="zoom">
     <button id="zoomIn" type="button" aria-label="확대">＋</button>
     <button id="zoomOut" type="button" aria-label="축소">－</button>
-    <button id="rotLeft" class="rot" type="button" aria-label="시점 왼쪽으로 돌리기" title="시점 회전 (Q)">⟲</button>
-    <button id="rotRight" class="rot" type="button" aria-label="시점 오른쪽으로 돌리기" title="시점 회전 (E)">⟳</button>
+    <button id="rotLeft" class="rot" type="button" aria-label="시점 왼쪽으로 돌리기" title="왼쪽으로 돌리기 (Q) · 꾹 누르면 계속">⟲</button>
+    <button id="rotRight" class="rot" type="button" aria-label="시점 오른쪽으로 돌리기" title="오른쪽으로 돌리기 (E) · 꾹 누르면 계속">⟳</button>
+    <button id="campusBgm" class="bgm" type="button" data-bgm-toggle aria-pressed="true" aria-label="배경음악 켜기/끄기" title="배경음악 끄기 (M)">🎵</button>
+    <button id="tiltUp" class="rot" type="button" aria-label="위에서 내려다보기" title="위에서 내려다보기 (R) · 꾹 누르면 계속">▲</button>
+    <button id="tiltDown" class="rot" type="button" aria-label="낮게 옆에서 보기" title="낮게 옆에서 보기 (F) · 꾹 누르면 계속">▼</button>
   </div>
 
   <nav class="actionbar">
     <button id="btnBuild" class="btn primary" type="button">🪨 여기에 돌탑 쌓기</button>
     <button id="btnGoMine" class="btn go-mine" type="button" title="내 돌탑 앞으로 바로 이동 (M)" hidden>📍 <span class="lbl">내 돌탑으로 이동</span><span class="lbl-s">내 돌탑</span></button>
     <button id="btnList" class="btn" type="button">📜 <span class="lbl">돌탑 </span>구경</button>
+    <button id="btnChat" class="btn icon" type="button" aria-label="말풍선 보내기" title="말풍선 보내기 (Enter)" hidden>💬<small id="peerCount"></small></button>
     <button id="btnHelp" class="btn icon" type="button" aria-label="도움말">?</button>
   </nav>
 
@@ -65,22 +69,45 @@
   <button id="myArrow" class="my-arrow" type="button" aria-label="내 돌탑 방향 (누르면 이동)" hidden>
     <span class="arr">➤</span><span id="myArrowText" class="txt">⭐ 내 돌탑</span>
   </button>
+  <!-- 말풍선 입력 (기록은 남지 않아요) -->
+  <form id="chatBar" class="chatbar" autocomplete="off" hidden>
+    <input id="inChat" maxlength="40" placeholder="말풍선으로 할 말 (Enter로 보내기)" enterkeyhint="send">
+    <button class="btn primary" type="submit">보내기</button>
+  </form>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="backdrop" class="backdrop"></div>
 
   <!-- 처음 방문 -->
-  <div id="mWelcome" class="layer modal" role="dialog" aria-labelledby="welcomeTitle">
+  <div id="mWelcome" class="layer modal wide" role="dialog" aria-labelledby="welcomeTitle">
     <div class="modal-hero">🪨🌿🪨</div>
     <h2 id="welcomeTitle">사이버 돌탑 쌓기</h2>
     <p class="sub">충북대 캠퍼스를 거닐며 소원을 담아 돌탑을 쌓아요.<br>높이 쌓을수록 <b>소원 기원 게이지</b>가 차올라요!</p>
-    <label class="field">
-      <span>닉네임</span>
-      <input id="inName" maxlength="10" placeholder="예) 개신동 다람쥐" autocomplete="off">
-    </label>
-    <div class="field">
-      <span>캐릭터 색</span>
-      <div id="colorPick" class="swatches"></div>
+    <div class="welcome-cols">
+      <div class="welcome-main">
+        <label class="field">
+          <span>닉네임</span>
+          <span class="name-row">
+            <input id="inName" maxlength="10" placeholder="예) 개신동 다람쥐" autocomplete="off">
+            <button id="btnRandomName" class="dice" type="button" title="랜덤 닉네임·색" aria-label="랜덤 닉네임과 색으로 바꾸기">🎲</button>
+          </span>
+        </label>
+        <div class="field">
+          <span>캐릭터 색</span>
+          <div id="colorPick" class="swatches"></div>
+        </div>
+      </div>
+      <!-- 캐릭터 꾸미기 (처음 입장 + 닉네임 눌렀을 때 같은 창) -->
+      <section class="deco" aria-labelledby="decoTitle">
+        <h3 id="decoTitle">🎨 캐릭터 꾸미기</h3>
+        <canvas id="decoPreview" class="deco-preview" aria-label="내 캐릭터 미리보기"></canvas>
+        <div class="deco-label">헤어스타일</div>
+        <div id="hairPick" class="deco-opts" role="radiogroup" aria-label="헤어스타일"></div>
+        <div class="deco-label">머리색</div>
+        <div id="hairColorPick" class="swatches sm" role="radiogroup" aria-label="머리색"></div>
+        <div class="deco-label">표정</div>
+        <div id="facePick" class="deco-opts" role="radiogroup" aria-label="표정"></div>
+      </section>
     </div>
     <button id="btnStart" class="btn primary wide" type="button">캠퍼스 입장하기</button>
   </div>
@@ -104,7 +131,7 @@
     <h2 id="helpTitle">이렇게 놀아요</h2>
     <ol class="help">
       <li><b>이동</b> — 땅을 탭(클릭)하면 그곳으로 걸어가요. 꾹 누른 채 끌면 손가락을 따라가요. 키보드는 <kbd>WASD</kbd>/<kbd>방향키</kbd>(보는 방향 기준).</li>
-      <li><b>시점</b> — <kbd>Q</kbd>/<kbd>E</kbd> 또는 ⟲⟳ 버튼으로 돌려요. 마우스 오른쪽 버튼으로 끌거나, 두 손가락으로 돌리고 확대할 수도 있어요.</li>
+      <li><b>시점</b> — <kbd>Q</kbd>/<kbd>E</kbd> 또는 ⟲⟳ 버튼으로 좌우 360° 돌리고, <kbd>R</kbd>/<kbd>F</kbd> 또는 ▲▼ 버튼으로 위아래로 기울여요(꾹 누르면 계속 움직여요). 마우스 오른쪽 버튼으로 끌거나, 두 손가락으로 돌리고 확대할 수도 있어요.</li>
       <li><b>돌탑 세우기</b> — 발밑 링이 <b style="color:#2f9a55">초록색</b>인 잔디밭에서 <b>여기에 돌탑 쌓기</b>를 누르고 소원을 적어요. 중앙도서관 남쪽 <b>소원 돌탑 마당</b>을 추천해요! (한 사람당 돌탑 1개)</li>
       <li><b>돌 쌓기</b> — 아래에서 돌 모양을 고르고, 위에서 움직이는 돌을 <b>탭</b>해서 떨어뜨려요. (<kbd>Space</kbd>, 숫자키 <kbd>1~7</kbd>)</li>
       <li><b>균형</b> — 위에 올린 돌들의 무게중심이 아랫돌 위를 벗어나면 와르르! 둥근돌·뾰족돌은 그 위에 쌓기 어려워요.</li>
@@ -112,6 +139,7 @@
       <li><b>기록</b> — 최고 기록이 캠퍼스의 내 돌탑이 되고, <b>15층</b>이면 소원 기원 게이지 100%!</li>
       <li><b>내 돌탑 찾기</b> — 내 돌탑이 화면 밖에 있으면 가장자리의 ⭐ 화살표가 방향과 거리를 알려 줘요. 아래 <b>📍 내 돌탑으로 이동</b>(<kbd>M</kbd>)을 누르면 바로 앞으로 이동해요.</li>
       <li><b>응원</b> — 다른 사람의 돌탑을 눌러 소원을 보고 ♥ 좋아요와 응원 한마디를 남겨요.</li>
+      <li><b>말풍선</b> — 지금 접속한 친구들이 캠퍼스에 함께 보여요. 💬 버튼(또는 <kbd>Enter</kbd>)으로 말하면 내 머리 위에 5초 동안 말풍선이 떠요. 기록은 남지 않아요.</li>
     </ol>
     <button id="btnHelpClose" class="btn primary wide" type="button">알겠어요!</button>
   </div>
@@ -181,6 +209,7 @@
       </div>
     </div>
     <div id="skWish" class="sk-wish"></div>
+    <button id="skBgm" class="bgm-btn" data-bgm-toggle type="button" aria-pressed="true" aria-label="배경음악 켜기/끄기" title="배경음악 끄기 (M)">🎵</button>
     <div id="skTip" class="sk-tip">화면을 탭하면 돌이 떨어져요 👇</div>
     <div id="skBottom" class="stack-bottom">
       <div id="skTray" class="tray"></div>
@@ -202,20 +231,35 @@
         <div class="gauge"><i id="rsGaugeFill"></i></div>
         <small id="rsGaugeLabel"></small>
         <p id="rsNote" class="muted small"></p>
+        <button id="rsDecorate" class="btn wide" type="button" hidden>🎨 돌탑 꾸미기</button>
         <div class="row-btns">
           <button id="rsExit" class="btn" type="button">캠퍼스로</button>
           <button id="rsRetry" class="btn primary" type="button">🔁 다시 도전</button>
         </div>
       </div>
     </div>
+    <!-- 돌탑 꾸미기: 색상 테마 고르기 (결과 화면에서 열려요) -->
+    <div id="skDecor" class="decor-bar" hidden>
+      <div class="decor-title">🎨 색상 테마를 골라 보세요</div>
+      <div id="skTones" class="decor-tones">
+        <button class="tone-btn on" data-tone="natural" type="button"><i class="tone-swatch natural"></i>자연석톤</button>
+        <button class="tone-btn" data-tone="pastel" type="button"><i class="tone-swatch pastel"></i>파스텔톤</button>
+        <button class="tone-btn" data-tone="rainbow" type="button"><i class="tone-swatch rainbow"></i>무지개톤</button>
+      </div>
+      <div class="stack-actions">
+        <button id="skDecorDone" class="btn primary" type="button">✅ 꾸미기 완료</button>
+      </div>
+    </div>
   </section>
 
-  <script src="js/data.js"></script>
-  <script src="js/stones.js"></script>
+  <script src="js/data.js?v=2026112105"></script>
+  <script src="js/stones.js?v=2026112105"></script>
+  <script src="js/avatar.js?v=2026112105"></script>
   <!-- 온라인 공유(Supabase): 라이브러리 + 연결 정보. 불러오지 못하면 브라우저 저장만 사용 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
-  <script src="js/supabase-config.js"></script>
-  <script src="js/store.js"></script>
+  <script src="js/supabase-config.js?v=2026112105"></script>
+  <script src="js/store.js?v=2026112105"></script>
+  <script src="js/live.js?v=2026112105"></script>
   <!--
     3D 불러오기
      1) js3d/campus3d.js(3D 캠퍼스) → window.Campus
@@ -247,7 +291,7 @@
       let reason = '';
       const task = location.protocol === 'file:'
         ? Promise.reject(new Error('file'))
-        : Promise.all([import('./js3d/campus3d.js'), import('./js3d/stack3d.js')]).then(function (mods) {
+        : Promise.all([import('./js3d/campus3d.js?v=2026112105'), import('./js3d/stack3d.js?v=2026112105')]).then(function (mods) {
             mods[0].prepare(document.getElementById('campus'));
           });
 
@@ -258,9 +302,12 @@
         const old = document.getElementById('campus');
         old.replaceWith(old.cloneNode(false));
         document.querySelectorAll('.zoom .rot').forEach(function (b) { b.hidden = true; });
-        return load('js/campus.js').then(function () { return load('js/stack.js'); });
+        // 이미 2D로 보이고 있으니 "2D로 보기" 버튼은 숨겨요
+        document.querySelectorAll('.mode-link').forEach(function (a) { a.hidden = true; });
+        document.querySelectorAll('[data-bgm-toggle]').forEach(function (b) { b.hidden = true; });
+        return load('js/campus.js?v=2026112105').then(function () { return load('js/stack.js?v=2026112105'); });
       }).then(function () {
-        return load('js/main.js');
+        return load('js/main.js?v=2026112105');
       }).then(function () {
         hideLoading();
         if (reason === 'file') App.toast('3D는 로컬 서버로 열어야 보여요. 지금은 2D 지도예요 🗺️');

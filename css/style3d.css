@@ -34,27 +34,93 @@ body.stacking #labels3d { display: none; }
 .lb3.tower.mine { background: #ffe2a8; }
 .lb3.me { background: var(--primary-2); font-size: 13px; }
 .lb3.npc { font-size: 11px; opacity: .85; border-width: 1.5px; }
+.lb3.peer { background: #fff; font-size: 12.5px; }
+
+/* 머리 위 말풍선 (이름표 바로 위) */
+.lb3.bubble {
+  margin-top: -30px;
+  max-width: 220px;
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: #fff;
+  font-family: 'Gowun Dodum', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-align: center;
+  animation: bubbleIn .18s ease-out;
+}
+.lb3.bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  width: 10px;
+  height: 10px;
+  margin-left: -6px;
+  border-right: 2px solid var(--line);
+  border-bottom: 2px solid var(--line);
+  background: #fff;
+  transform: rotate(45deg);
+}
+@keyframes bubbleIn { from { opacity: 0; margin-top: -22px; } }
+
+/* 말풍선 입력창 (아래 버튼 줄 바로 위) */
+.chatbar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(80px + var(--safe-bottom));
+  z-index: 11;
+  display: flex;
+  gap: 6px;
+  width: min(440px, calc(100vw - 24px));
+  padding: 6px;
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--line);
+  transform: translateX(-50%);
+}
+.chatbar[hidden] { display: none; }
+.chatbar input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  font-size: 16px;
+  outline: none;
+}
+.chatbar input:focus { border-color: #e0952f; }
+.chatbar .btn { min-height: 40px; padding: 0 14px; }
+#btnChat { position: relative; }
+#btnChat[hidden] { display: none; }
+#btnChat small {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  padding: 1px 5px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: #4fd17a;
+  font-size: 11px;
+  line-height: 14px;
+}
+#btnChat small:empty { display: none; }
+body.stacking .chatbar, body.stacking #btnChat { display: none; }
 
 /* 시점 회전 버튼 (확대·축소 버튼과 같은 모양) */
 .zoom .rot { font-size: 20px; }
-
-/* 2D ↔ 3D 전환 링크 */
-.mode-link {
-  position: fixed;
-  left: 12px;
-  bottom: calc(86px + var(--safe-bottom));
-  z-index: 10;
-  padding: 6px 12px;
-  border: 2px solid var(--line);
-  border-radius: 999px;
-  background: var(--paper);
-  box-shadow: 0 3px 0 var(--line);
-  color: var(--ink);
-  font-family: 'Jua', sans-serif;
-  font-size: 13px;
-  text-decoration: none;
-}
-body.stacking .mode-link { display: none; }
+.zoom .rot[hidden] { display: none; }
+#tiltUp, #tiltDown { font-size: 16px; }
+.zoom button { touch-action: none; user-select: none; -webkit-user-select: none; }
+/* 버튼이 6개라 2줄로: [＋ －] [⟲ ⟳] [▲ ▼] */
+.zoom { display: grid; grid-template-columns: repeat(2, 42px); }
 
 /* 3D 돌 쌓기: 떠오르는 글자(+1층, 아슬아슬!)와 15층 별 */
 .sk3d-layer {
@@ -76,6 +142,72 @@ body.stacking .mode-link { display: none; }
 }
 .sk3d-star { font-size: 26px; -webkit-text-stroke: 0; }
 
+/* 돌탑 꾸미기: 색상 테마 바 (돌 트레이와 같은 모양) */
+.decor-bar {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 6;
+  padding: 10px 10px calc(12px + var(--safe-bottom));
+  border-top: 3px solid var(--line);
+  border-radius: 22px 22px 0 0;
+  background: rgba(255, 253, 246, .96);
+  text-align: center;
+  animation: fadeIn .25s;
+}
+.decor-title { margin-bottom: 8px; font-family: 'Jua', sans-serif; font-size: 16px; }
+.decor-tones { display: flex; gap: 8px; justify-content: center; margin-bottom: 10px; }
+.tone-btn {
+  display: flex;
+  flex: 1;
+  max-width: 130px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px 6px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 3px 0 var(--line);
+  font-family: 'Jua', sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform .1s, background .1s;
+}
+.tone-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+.tone-btn.on { background: #fff0c9; transform: translateY(-3px); box-shadow: 0 5px 0 var(--line); border-color: #b9671b; }
+.tone-btn:focus-visible { outline: 3px solid #6c9ef0; outline-offset: 2px; }
+.tone-swatch {
+  width: 46px;
+  height: 22px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+}
+.tone-swatch.natural { background: linear-gradient(90deg, #bdb5a8, #9fa8aa, #c6bca7, #a49e93); }
+.tone-swatch.pastel { background: linear-gradient(90deg, #f6c1cf, #bfe3f7, #d9c8f0, #bfeedd, #fde7b0); }
+.tone-swatch.rainbow { background: linear-gradient(90deg, #ff6b6b, #ffa94d, #ffd43b, #69db7c, #4dabf7, #5c7cfa, #b197fc); }
+.stack-scene.decorating .stack-bottom { display: none; }
+
+/* 배경음악 ON/OFF 버튼 (캠퍼스 ＋－ 버튼과 같은 모양) */
+.bgm-btn {
+  position: absolute;
+  top: calc(84px + var(--safe-top));
+  right: 12px;
+  z-index: 7;
+  width: 42px;
+  height: 42px;
+  border: 2.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--line);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.bgm-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+.bgm-btn:focus-visible { outline: 3px solid #6c9ef0; outline-offset: 2px; }
+.bgm-btn.off, .zoom .bgm.off { background: #ece6da; }
+.zoom .bgm { font-size: 19px; }
+
 /* 처음 불러오는 동안 */
 .loading3d {
   position: fixed;
@@ -94,3 +226,199 @@ body.stacking .mode-link { display: none; }
 .loading3d .spin { font-size: 44px; animation: bob 1.2s ease-in-out infinite; }
 .loading3d small { font-family: 'Gowun Dodum', sans-serif; font-size: 13px; color: var(--muted); }
 .loading3d.done { opacity: 0; pointer-events: none; }
+
+/* =========================================================
+ * 캠퍼스 지도 (js3d/mapui.js) — 미니맵 · 전체 지도 · 경계 안내
+ *  PC: 미니맵 오른쪽 아래 / 좁은 화면(760px 이하): 오른쪽 위 · 가로:세로 = 4:3
+ * ========================================================= */
+/* PC 미니맵 가로 크기: 기본 360px, 단 화면이 작으면
+ *  - 가운데 아래 액션바(폭 약 390px)와 안 겹치게
+ *  - 위로 올린 확대·회전 버튼이 오른쪽 위 칩과 안 겹치게 줄어들어요 */
+:root { --mm-w: min(360px, calc(50vw - 224px), calc((100vh - 320px) * 4 / 3)); }
+.minimap {
+  position: fixed;
+  right: 12px;
+  bottom: calc(16px + var(--safe-bottom));
+  z-index: 10;
+  width: var(--mm-w);
+  height: calc(var(--mm-w) * 3 / 4);
+  overflow: hidden;
+  border: 3px solid var(--line);
+  border-radius: 18px;
+  background: var(--grass);
+  box-shadow: 0 4px 0 var(--line);
+}
+.minimap canvas { display: block; width: 100%; height: 100%; }
+.mm-open {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.mm-fold {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  font: 14px/1 'Jua', sans-serif;
+  color: var(--ink);
+  cursor: pointer;
+}
+.mm-n, .mm-key {
+  position: absolute;
+  font-family: 'Jua', sans-serif;
+  pointer-events: none;
+}
+.mm-n {
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  color: var(--ink);
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
+}
+.mm-key {
+  right: 5px;
+  bottom: 5px;
+  padding: 0 5px;
+  border: 1.5px solid var(--line);
+  border-radius: 5px;
+  background: var(--paper);
+  font-size: 11px;
+  line-height: 16px;
+}
+.minimap-show {
+  position: fixed;
+  right: 12px;
+  bottom: calc(16px + var(--safe-bottom));
+  z-index: 10;
+  padding: 6px 12px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--line);
+  color: var(--ink);
+  font-family: 'Jua', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+}
+.minimap[hidden], .minimap-show[hidden], .fullmap[hidden] { display: none; }
+body.stacking .minimap, body.stacking .minimap-show, body.stacking .edge-notice { display: none; }
+
+/* PC에서 미니맵이 펼쳐져 있으면 확대·회전 버튼을 미니맵 바로 위로 올려요 (접으면 원래 자리) */
+@media (min-width: 761px) {
+  body:not(.stacking):has(.minimap:not([hidden])) .zoom {
+    top: auto;
+    bottom: calc(16px + var(--safe-bottom) + var(--mm-w) * 3 / 4 + 16px);
+    transform: none;
+  }
+}
+
+/* 터치 화면엔 M 키가 없으니 표시 안 함 */
+@media (hover: none) { .mm-key { display: none; } }
+
+@media (max-width: 760px) {
+  .minimap, .minimap-show { top: calc(84px + var(--safe-top)); bottom: auto; right: 8px; }
+  .minimap { width: 152px; height: 114px; border-radius: 14px; }
+  .mm-fold { width: 22px; height: 22px; top: 4px; left: 4px; }
+  .mm-key { display: none; }
+}
+
+/* 전체 지도: PC는 큰 모달(다른 모달처럼 갈색 테두리 카드), 모바일은 화면 가득
+ *  닫기 버튼·범례는 지도 앱처럼 떠 있는 하얀 카드 */
+.fullmap {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: calc(20px + var(--safe-top)) 20px calc(20px + var(--safe-bottom));
+  background: rgba(50, 40, 30, .45);
+}
+.fullmap:focus { outline: none; }
+.fm-card {
+  position: relative;
+  /* 지도 비율(2460:1760, mapui.js FULL_MARGIN 참고)에 맞춰 모달이 지도에 딱 맞게 */
+  aspect-ratio: 2460 / 1760;
+  width: min(100%, 1180px, calc((100vh - 40px - var(--safe-top) - var(--safe-bottom)) * 2460 / 1760));
+  overflow: hidden;
+  border: 3px solid var(--line);
+  border-radius: 22px;
+  background: #c3ccb8;
+  box-shadow: 0 6px 0 var(--line);
+}
+.fm-card canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.fm-close {
+  position: absolute;
+  top: 18px;      /* 울타리 선 안쪽 잔디 위 */
+  right: 18px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--ink);
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;  /* 지도 위에서도 잘 보이게 */
+  cursor: pointer;
+}
+.fm-legend {
+  position: absolute;
+  left: 22px;     /* 울타리 선 안쪽 잔디 위 */
+  bottom: 24px;
+  display: flex;
+  gap: 14px;
+  padding: 9px 14px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .18);
+  font-size: 13px;
+  color: #333;
+  pointer-events: none;
+}
+.fm-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.fm-me { width: 13px; height: 13px; stroke: #4a3d33; stroke-width: 1.2; stroke-linejoin: round; }
+.fm-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .35);
+}
+.fm-dot.tower { background: #7d7368; }
+.fm-dot.mine { background: #ff6a00; }
+/* 모바일: 모달 대신 화면 가득, 오른쪽 위 ✕만 남겨요 */
+@media (max-width: 760px) {
+  .fullmap { padding: 0; }
+  .fm-card { width: 100%; height: 100%; aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none; }
+  .fm-close { top: calc(8px + var(--safe-top)); right: 8px; }
+  .fm-legend { display: none; }
+}
+
+/* 경계 안내 (캠퍼스 끝에 막혔을 때, 아이콘 없이 빨간 글씨만) */
+.edge-notice {
+  position: fixed;
+  left: 50%;
+  top: 26%;
+  z-index: 11;
+  font-family: 'Jua', sans-serif;
+  font-size: 22px;
+  color: #e0412f;
+  -webkit-text-stroke: 5px rgba(255, 255, 255, .95);
+  paint-order: stroke fill;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -6px);
+  transition: opacity .25s, transform .25s;
+}
+.edge-notice.show { opacity: 1; transform: translate(-50%, 0); }
+@media (max-width: 560px) { .edge-notice { font-size: 18px; } }

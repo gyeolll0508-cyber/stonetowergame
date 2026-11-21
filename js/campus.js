@@ -298,36 +298,11 @@
 
   function drawCharacter(c, label, isMe) {
     const bob = c.moving ? Math.abs(Math.sin(c.walk * 10)) * 4 : Math.sin(performance.now() / 500) * 1;
-    const x = c.x, y = c.y;
-    drawShadow(x, y, 15, 6);
-    // 발
-    ctx.fillStyle = '#4a3d33';
-    const step = c.moving ? Math.sin(c.walk * 10) * 4 : 0;
-    ctx.beginPath(); ctx.ellipse(x - 6 + step, y - 2, 5, 3.5, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(x + 6 - step, y - 2, 5, 3.5, 0, 0, Math.PI * 2); ctx.fill();
-    // 몸(동글동글)
-    const by = y - 20 - bob;
-    ctx.fillStyle = c.color;
-    ctx.strokeStyle = '#4a3d33';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.ellipse(x, by, 17, 18, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    // 얼굴
-    const fx = x + c.face * 3;
-    ctx.fillStyle = '#3a2f28';
-    ctx.beginPath(); ctx.arc(fx - 5, by - 3, 2.4, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(fx + 5, by - 3, 2.4, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,110,110,0.5)';
-    ctx.beginPath(); ctx.ellipse(fx - 9, by + 3, 3.5, 2, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(fx + 9, by + 3, 3.5, 2, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#3a2f28'; ctx.lineWidth = 1.6;
-    ctx.beginPath(); ctx.arc(fx, by + 1, 3, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
-    // 새싹 더듬이
-    ctx.strokeStyle = '#4a8f3c'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(x, by - 17); ctx.quadraticCurveTo(x + 2, by - 25, x, by - 27); ctx.stroke();
-    ctx.fillStyle = '#7fcf5f';
-    ctx.beginPath(); ctx.ellipse(x + 5, by - 27, 5, 3, -0.4, 0, Math.PI * 2); ctx.fill();
+    const step = c.moving ? Math.sin(c.walk * 10) * 3 : 0;
+    drawShadow(c.x, c.y, 15, 6);
+    AVATAR.draw(ctx, c.x, c.y, { color: c.color, hair: c.hair, face: c.look, hairColor: c.hairColor, bob: bob, step: step, dir: c.face });
     // 이름표
-    if (label) nameTag(label, x, by - 38, isMe ? '#ffb84d' : 'rgba(255,255,255,0.9)');
+    if (label) nameTag(label, c.x, c.y - 18 - bob - 48, isMe ? '#ffb84d' : 'rgba(255,255,255,0.9)');
   }
 
   function nameTag(text, x, y, bg) {
@@ -685,7 +660,7 @@
       const r = seeded(5);
       DATA.NPCS.forEach(function (n) {
         const p = randomWalkable(r);
-        npcs.push({ name: n.name, color: n.color, x: p.x, y: p.y, tx: null, ty: null, walk: 0, moving: false, face: 1, wait: r() * 3 });
+        npcs.push({ name: n.name, color: n.color, hair: n.hair, look: n.face, hairColor: n.hairColor, x: p.x, y: p.y, tx: null, ty: null, walk: 0, moving: false, face: 1, wait: r() * 3 });
       });
       resize();
       window.addEventListener('resize', resize);
@@ -705,9 +680,13 @@
 
     setTowers: function (list) { towers = list.slice(); },
 
-    setPlayer: function (name, color) {
+    setPlayer: function (name, color, look) {
       player.name = name || '나';
       player.color = color || DATA.COLORS[0];
+      const l = DATA.normLook(look);
+      player.hair = l.hair;
+      player.hairColor = l.hairColor;
+      player.look = l.face;   // player.face는 바라보는 방향(-1/1)이라 표정은 look
     },
 
     getPlayer: function () { return { x: player.x, y: player.y }; },

@@ -11,6 +11,7 @@
   'use strict';
 
   const KEY = 'cbnu-stonetower-v1';
+  const TONE_IDS = ['natural', 'pastel', 'rainbow']; // 돌탑 꾸미기 테마 (3D)
   let storageOk = true;
 
   function seed() {
@@ -68,8 +69,10 @@
 
     getProfile: function () { return state.profile; },
 
-    setProfile: function (name, color) {
-      state.profile = { name: name, color: color };
+    // look: { hair, face, hairColor } (캐릭터 꾸미기) — 없으면 지금 꾸민 모습 그대로
+    setProfile: function (name, color, look) {
+      const l = DATA.normLook(look || state.profile || null);
+      state.profile = { name: name, color: color, hair: l.hair, face: l.face, hairColor: l.hairColor };
       const mine = Store.myTower();
       if (mine) { mine.name = name; mine.color = color; }
       save();
@@ -161,11 +164,27 @@
       save();
     },
 
+    // 돌탑 꾸미기 테마 저장 ('natural' 자연석톤 | 'pastel' 파스텔톤 | 'rainbow' 무지개톤)
+    //  높이·닉네임·소원은 그대로 두고 테마만 바꿔요.
+    setTone: function (id, tone) {
+      const t = state.towers[id];
+      if (!t) return null;
+      const v = TONE_IDS.indexOf(tone) >= 0 ? tone : 'natural';
+      if (t.tone === v || (!t.tone && v === 'natural')) return t; // 바뀐 게 없으면 저장 안 함
+      t.tone = v;
+      save();
+      if (id === state.myId) Online.push(t);
+      return t;
+    },
+
     // 온라인 공유 상태: 'off'(설정 없음) | 'connecting' | 'online' | 'readonly'(구경만) | 'offline'
     onlineStatus: function () { return Online.status(); },
 
     // 서버에서 돌탑 목록이 바뀌었거나 연결 상태가 바뀌면 알려 줘요
-    onChange: function (fn) { Online.listen(fn); }
+    onChange: function (fn) { Online.listen(fn); },
+
+    // 실시간 기능(live.js)이 같은 Supabase 연결을 쓰도록 (없으면 null)
+    realtimeClient: function () { return Online.client(); }
   };
 
   /* ---------------- 온라인 공유 (Supabase) ----------------
@@ -184,6 +203,16 @@
     const enabled = !!(url && key && lib && lib.createClient);
     const TABLE = 'stone_towers';
     const COLS = 'id, owner_id, nickname, wish, height, last_height, color, cat, x, y, created_at, updated_at';
+    // 꾸미기 테마(tone) 칸: SQL을 아직 실행하지 않아 칸이 없으면 자동으로 빼고 동작해요
+    let hasTone = true;
+    function cols() { return hasTone ? COLS + ', tone' : COLS; }
+    function missingTone(err) {
+      return !!err && /tone/.test(err.message || '') && (err.code === '42703' || err.code === 'PGRST204');
+    }
+    function noToneColumn(err) {
+      hasTone = false;
+      console.warn('[온라인] stone_towers에 tone 칸이 없어서 꾸미기 테마는 이 브라우저에만 저장해요:', err.message);
+    }
     const listeners = [];
     let client = null, userId = null, ready = null;
     let status = enabled ? 'connecting' : 'off';
@@ -232,6 +261,7 @@
       t.wish = row.wish;
       t.best = row.height;
       t.last = row.last_height;
+      if ('tone' in row) t.tone = TONE_IDS.indexOf(row.tone) >= 0 ? row.tone : 'natural';
       t.createdAt = time(row.created_at);
       t.updatedAt = time(row.updated_at);
       t.likes = t.likes || 0;
@@ -290,10 +320,14 @@
     }
 
     function update(t) {
-      return client.from(TABLE).update({
+      const body = {
         nickname: clip(t.name, 10) || '익명', wish: clip(t.wish, 60), color: t.color, cat: t.cat,
         height: clampH(t.best), last_height: clampH(t.last || 0)
-      }).eq('id', t.rid).select('height, updated_at').then(function (r) {
+      };
+      if (hasTone && t.tone) body.tone = t.tone;
+      return client.from(TABLE).update(body).eq('id', t.rid).select('height, updated_at').then(function (r) {
+        // tone 칸이 없으면 테마만 빼고 다시 저장 (높이·소원 저장은 그대로)
+        if (r.error && 'tone' in body && missingTone(r.error)) { noToneColumn(r.error); return update(t); }
         if (r.error) throw r.error;
         // RLS에 막히면 오류 없이 0행이 와요 → 실패로 처리
         if (!r.data || !r.data.length) throw new Error('돌탑을 수정할 권한이 없어요');
@@ -309,7 +343,9 @@
       save();
       chains[t.id] = (chains[t.id] || Promise.resolve()).then(getReady).then(function () {
         if (t.rid) return update(t);
-        return insert(t).then(function () { if (t.best > 0 || t.last) return update(t); });
+        return insert(t).then(function () {
+          if (t.best > 0 || t.last || (t.tone && t.tone !== 'natural')) return update(t);
+        });
       }).then(function () {
         t.dirty = false;
         save();
@@ -329,7 +365,13 @@
         signedIn = false;
         console.warn('[온라인] 익명 로그인에 실패했어요. Supabase 대시보드에서 Anonymous sign-ins를 켜 주세요:', err);
       }).then(function () {
-        return client.from(TABLE).select(COLS).order('id').limit(2000);
+        return client.from(TABLE).select(cols()).order('id').limit(2000).then(function (r) {
+          if (r.error && hasTone && missingTone(r.error)) {
+            noToneColumn(r.error);
+            return client.from(TABLE).select(cols()).order('id').limit(2000);
+          }
+          return r;
+        });
       }).then(function (r) {
         if (r.error) throw r.error;
         merge(r.data || []);
@@ -354,6 +396,7 @@
 
     return {
       push: push,
+      client: function () { return client; },
       status: function () { return status; },
       listen: function (fn) { listeners.push(fn); }
     };

@@ -10,10 +10,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=2026112105">
 </head>
 <body>
   <canvas id="campus" aria-label="충북대학교 캠퍼스 지도"></canvas>
+
+  <!-- 2D는 이 브라우저에만 저장돼요. 3D로 돌아가면 기록이 모두와 공유돼요. -->
+  <a class="mode-link" href="index3d.html" title="3D 캠퍼스로 돌아가기 (기록이 모두와 공유돼요)">🧊 3D로 보기</a>
 
   <!-- 상단 HUD -->
   <header class="hud">
@@ -55,17 +58,35 @@
   <div id="backdrop" class="backdrop"></div>
 
   <!-- 처음 방문 -->
-  <div id="mWelcome" class="layer modal" role="dialog" aria-labelledby="welcomeTitle">
+  <div id="mWelcome" class="layer modal wide" role="dialog" aria-labelledby="welcomeTitle">
     <div class="modal-hero">🪨🌿🪨</div>
     <h2 id="welcomeTitle">사이버 돌탑 쌓기</h2>
     <p class="sub">충북대 캠퍼스를 거닐며 소원을 담아 돌탑을 쌓아요.<br>높이 쌓을수록 <b>소원 기원 게이지</b>가 차올라요!</p>
-    <label class="field">
-      <span>닉네임</span>
-      <input id="inName" maxlength="10" placeholder="예) 개신동 다람쥐" autocomplete="off">
-    </label>
-    <div class="field">
-      <span>캐릭터 색</span>
-      <div id="colorPick" class="swatches"></div>
+    <div class="welcome-cols">
+      <div class="welcome-main">
+        <label class="field">
+          <span>닉네임</span>
+          <span class="name-row">
+            <input id="inName" maxlength="10" placeholder="예) 개신동 다람쥐" autocomplete="off">
+            <button id="btnRandomName" class="dice" type="button" title="랜덤 닉네임·색" aria-label="랜덤 닉네임과 색으로 바꾸기">🎲</button>
+          </span>
+        </label>
+        <div class="field">
+          <span>캐릭터 색</span>
+          <div id="colorPick" class="swatches"></div>
+        </div>
+      </div>
+      <!-- 캐릭터 꾸미기 (처음 입장 + 닉네임 눌렀을 때 같은 창) -->
+      <section class="deco" aria-labelledby="decoTitle">
+        <h3 id="decoTitle">🎨 캐릭터 꾸미기</h3>
+        <canvas id="decoPreview" class="deco-preview" aria-label="내 캐릭터 미리보기"></canvas>
+        <div class="deco-label">헤어스타일</div>
+        <div id="hairPick" class="deco-opts" role="radiogroup" aria-label="헤어스타일"></div>
+        <div class="deco-label">머리색</div>
+        <div id="hairColorPick" class="swatches sm" role="radiogroup" aria-label="머리색"></div>
+        <div class="deco-label">표정</div>
+        <div id="facePick" class="deco-opts" role="radiogroup" aria-label="표정"></div>
+      </section>
     </div>
     <button id="btnStart" class="btn primary wide" type="button">캠퍼스 입장하기</button>
   </div>
@@ -194,11 +215,12 @@
     </div>
   </section>
 
-  <script src="js/data.js"></script>
-  <script src="js/stones.js"></script>
-  <script src="js/store.js"></script>
-  <script src="js/campus.js"></script>
-  <script src="js/stack.js"></script>
-  <script src="js/main.js"></script>
+  <script src="js/data.js?v=2026112105"></script>
+  <script src="js/stones.js?v=2026112105"></script>
+  <script src="js/avatar.js?v=2026112105"></script>
+  <script src="js/store.js?v=2026112105"></script>
+  <script src="js/campus.js?v=2026112105"></script>
+  <script src="js/stack.js?v=2026112105"></script>
+  <script src="js/main.js?v=2026112105"></script>
 </body>
 </html>
