@@ -448,7 +448,7 @@ function resize() {
 /* ---------------- 돌탑 동기화 ---------------- */
 
 function towerSig(t) {
-  return [t.best, t.x, t.y, t.cat, t.color, t.name, Store.isMine(t.id)].join('|');
+  return [t.best, t.x, t.y, t.cat, t.color, t.name, Store.isMine(t.id), t.tone || 'natural'].join('|'); // 테마가 바뀌면 다시 그리기
 }
 function labelText(t) {
   const mine = Store.isMine(t.id);

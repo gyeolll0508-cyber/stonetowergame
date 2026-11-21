@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { toV3 } from './logic.js?v=2026112105';
 import { glowTexture } from './textures.js?v=2026112105';
+import { paintStone } from './tones.js';
 
 const DATA = window.DATA, STONES = window.STONES;
 const MINI = ['flat', 'block', 'mong', 'flat', 'pebble', 'block', 'long', 'mong']; // 2D 지도와 같은 순서
@@ -127,6 +128,7 @@ export function makeTower(t) {
     s.scale.set(w, hh, d);
     s.position.set(Math.sin(i * 1.7 + t.y) * 0.05, y + hh * 0.46, Math.cos(i * 1.3 + t.x) * 0.05);
     s.rotation.y = i * 1.9 + t.x;
+    paintStone(s, t.tone, i + 1); // 꾸미기 테마(저장된 값, 없으면 자연석톤)
     group.add(s);
     y += hh * 0.86;
   }
