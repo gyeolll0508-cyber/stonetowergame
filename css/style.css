@@ -181,6 +181,24 @@ kbd {
 .badge.ok { background: #e3f5e2; }
 .badge.warn { background: #ffe9c7; }
 
+/* ---------------- 2D ↔ 3D 전환 링크 ---------------- */
+.mode-link {
+  position: fixed;
+  left: 12px;
+  bottom: calc(86px + var(--safe-bottom));
+  z-index: 10;
+  padding: 6px 12px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--line);
+  color: var(--ink);
+  font-family: 'Jua', sans-serif;
+  font-size: 13px;
+  text-decoration: none;
+}
+body.stacking .mode-link { display: none; }
+
 /* ---------------- 확대·축소 ---------------- */
 
 .zoom {

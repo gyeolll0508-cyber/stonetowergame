@@ -5,7 +5,7 @@
  *    단순화한 것이에요. 층수는 게임용 추정값이에요.
  * ========================================================= */
 import * as THREE from 'three';
-import { S, W, H, toV3, PLAZA, onRoad } from './logic.js?v=2026112105';
+import { S, W, H, toV3, PLAZA, onRoad, hedgeRects } from './logic.js?v=2026112105';
 import * as TX from './textures.js?v=2026112105';
 
 const DATA = window.DATA;
@@ -94,11 +94,18 @@ export function buildWorld(scene, o) {
     m.position.set((a.x + b.x) / 2, y, (a.z + b.z) / 2);
     m.receiveShadow = true;
     scene.add(m);
-    [a, b].forEach(function (p) {
-      const cg = scaleUV(new THREE.CircleGeometry(w / 2, 24), w / 4, w / 4);
+    // 길 끝 둥근 마감 (바깥쪽 반원만)
+    //  - 길과 겹치지 않아서 움직여도 깜빡이지(z-fighting) 않아요
+    //  - 길과 같은 방향으로 돌리고 벽돌 무늬 위치(u)도 길에 맞춰서 이음매가 자연스럽게
+    const r0 = w / 2;
+    [[a, Math.PI / 2, -r0 / 4], [b, -Math.PI / 2, (len - r0) / 4]].forEach(function (e) {
+      const cg = scaleUV(new THREE.CircleGeometry(r0, 16, e[1], Math.PI), w / 4, w / 4);
+      const uv = cg.attributes.uv;
+      for (let k = 0; k < uv.count; k++) uv.setX(k, uv.getX(k) + e[2]);
       cg.rotateX(-Math.PI / 2);
       const cap = new THREE.Mesh(cg, roadMat);
-      cap.position.set(p.x, y, p.z);
+      cap.rotation.y = m.rotation.y;
+      cap.position.set(e[0].x, y, e[0].z);
       cap.receiveShadow = true;
       scene.add(cap);
     });
@@ -351,19 +358,37 @@ export function buildWorld(scene, o) {
   (function addHedges() {
     const tex = TX.hedgeTexture();
     const gate = DATA.PLACES.find(function (p) { return p.type === 'gate'; });
-    const segs = [
-      [0, 12, W, 12], [12, 0, 12, H], [W - 12, 0, W - 12, H],
-      [0, H - 8, gate.x - 10, H - 8], [gate.x + gate.w + 10, H - 8, W, H - 8]
-    ];
-    segs.forEach(function (sg) {
-      const a = toV3(sg[0], sg[1]), b = toV3(sg[2], sg[3]);
-      const lx = Math.abs(b.x - a.x) || 1.2, lz = Math.abs(b.z - a.z) || 1.2;
+    // 모서리가 딱 맞게 만나는 직사각형들 (logic.js hedgeRects — 지도도 같은 걸 그려요)
+    //  세로 울타리도 길이 방향으로 만든 뒤 90° 돌려서, 윗면 잎 무늬가 가로 울타리와 똑같이 보이게
+    hedgeRects().forEach(function (r) {
+      const a = toV3(r[0], r[1]), b = toV3(r[2], r[3]);
+      const lx = b.x - a.x, lz = b.z - a.z;
+      const len = Math.max(lx, lz), thick = Math.min(lx, lz);
       const t2 = tex.clone();
-      t2.repeat.set(Math.max(lx, lz) / 3, 0.5);
-      const m = shadowed(new THREE.Mesh(new THREE.BoxGeometry(lx, 1.3, lz), new THREE.MeshStandardMaterial({ map: t2, roughness: 1 })));
+      t2.repeat.set(len / 3, 0.5);
+      const m = shadowed(new THREE.Mesh(new THREE.BoxGeometry(len, 1.3, thick), new THREE.MeshStandardMaterial({ map: t2, roughness: 1 })));
+      if (lz > lx) m.rotation.y = Math.PI / 2;
       m.position.set((a.x + b.x) / 2, 0.65, (a.z + b.z) / 2);
       scene.add(m);
     });
+
+    // 정문 아래 울타리가 빈 곳: 차단봉(볼라드)만 촘촘히 세워 "여기가 캠퍼스 끝"을 보여 줘요
+    // (실제로 막히는 선은 logic.js BOUND — 차단봉 바로 안쪽)
+    const n = 13, x1 = gate.x - 6, x2 = gate.x + gate.w + 6, py = H - 10;   // 약 1.6m 간격
+    const postGeo = new THREE.CylinderGeometry(0.13, 0.16, 0.9, 10);
+    postGeo.translate(0, 0.45, 0);
+    const bandGeo = new THREE.CylinderGeometry(0.165, 0.165, 0.12, 10);
+    bandGeo.translate(0, 0.72, 0);
+    const posts = new THREE.InstancedMesh(postGeo, new THREE.MeshStandardMaterial({ color: 0x5b6266, roughness: 0.6, metalness: 0.3 }), n);
+    const bands = new THREE.InstancedMesh(bandGeo, new THREE.MeshStandardMaterial({ color: 0xf2c53d, roughness: 0.5 }), n);
+    const m4 = new THREE.Matrix4();
+    for (let i = 0; i < n; i++) {
+      const p = toV3(x1 + (x2 - x1) * i / (n - 1), py);
+      m4.makeTranslation(p.x, 0, p.z);
+      posts.setMatrixAt(i, m4);
+      bands.setMatrixAt(i, m4);
+    }
+    [posts, bands].forEach(function (m) { shadowed(m, true, false); scene.add(m); });
   })();
 
   /* ---------------- 나무 (InstancedMesh로 가볍게) ---------------- */
