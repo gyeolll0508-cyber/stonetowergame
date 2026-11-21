@@ -4,8 +4,8 @@
  *  - 돌탑: 최고 기록(best)만큼 돌을 쌓아 보여 줘요(2D 지도와 같은 규칙).
  * ========================================================= */
 import * as THREE from 'three';
-import { toV3 } from './logic.js?v=2026112105';
-import { glowTexture } from './textures.js?v=2026112105';
+import { toV3 } from './logic.js?v=2026112206';
+import { glowTexture } from './textures.js?v=2026112206';
 import { paintStone } from './tones.js';
 
 const DATA = window.DATA, STONES = window.STONES;

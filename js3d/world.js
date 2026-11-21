@@ -5,8 +5,8 @@
  *    단순화한 것이에요. 층수는 게임용 추정값이에요.
  * ========================================================= */
 import * as THREE from 'three';
-import { S, W, H, toV3, PLAZA, onRoad, hedgeRects } from './logic.js?v=2026112105';
-import * as TX from './textures.js?v=2026112105';
+import { S, W, H, toV3, PLAZA, onRoad, hedgeRects } from './logic.js?v=2026112206';
+import * as TX from './textures.js?v=2026112206';
 
 const DATA = window.DATA;
 
@@ -82,18 +82,27 @@ export function buildWorld(scene, o) {
 
   const paving = TX.pavingTexture();
   const roadMat = new THREE.MeshStandardMaterial({ map: paving, roughness: 0.95 });
-  DATA.ROADS.forEach(function (r, i) {
+  // 길은 한 그룹에 모아서, 관리자 모드에서 길을 바꾸면 통째로 다시 깔아요
+  const roadGroup = new THREE.Group();
+  scene.add(roadGroup);
+  function buildRoads() {
+    roadGroup.children.slice().forEach(function (m) { roadGroup.remove(m); m.geometry.dispose(); });
+    DATA.ROADS.forEach(addRoad);
+  }
+  function addRoad(r, i) {
     const a = toV3(r.x1, r.y1), b = toV3(r.x2, r.y2);
     const dx = b.x - a.x, dz = b.z - a.z;
     const len = Math.hypot(dx, dz), w = r.w * S;
-    const y = 0.02 + i * 0.01;
+    if (len < 0.01) return;
+    const y = 0.02 + (i % 8) * 0.006;   // 겹치는 길끼리 깜빡이지 않게 살짝씩 높이 차이
     const geo = scaleUV(new THREE.PlaneGeometry(len, w), len / 4, w / 4);
     geo.rotateX(-Math.PI / 2);
     const m = new THREE.Mesh(geo, roadMat);
     m.rotation.y = Math.atan2(-dz, dx);
     m.position.set((a.x + b.x) / 2, y, (a.z + b.z) / 2);
     m.receiveShadow = true;
-    scene.add(m);
+    m.userData.road = r;
+    roadGroup.add(m);
     // 길 끝 둥근 마감 (바깥쪽 반원만)
     //  - 길과 겹치지 않아서 움직여도 깜빡이지(z-fighting) 않아요
     //  - 길과 같은 방향으로 돌리고 벽돌 무늬 위치(u)도 길에 맞춰서 이음매가 자연스럽게
@@ -107,22 +116,64 @@ export function buildWorld(scene, o) {
       cap.rotation.y = m.rotation.y;
       cap.position.set(e[0].x, y, e[0].z);
       cap.receiveShadow = true;
-      scene.add(cap);
+      cap.userData.road = r;
+      roadGroup.add(cap);
     });
-  });
+  }
+  buildRoads();
 
   /* ---------------- 장소들 ---------------- */
 
-  DATA.PLACES.forEach(function (p) {
+  // 장소마다 그룹 하나 → 관리자 모드에서 통째로 옮기거나(이동) 다시 지을(크기·색 변경) 수 있어요
+  const placeObjs = new Map();   // place 객체 → { place, group, building, anim, signs, origin }
+  let cur = null;                // 지금 짓고 있는 장소 (add* 함수들이 여기에 붙여요)
+
+  function addPlace(p) {
+    const g = new THREE.Group();
+    g.userData.place = p;
+    cur = { place: p, group: g, building: null, anim: null, signs: [], origin: { x: p.x, y: p.y } };
     if (p.type === 'building') addBuilding(p);
     else if (p.type === 'gate') addGate(p);
     else if (p.type === 'pond') addPond(p);
     else if (p.type === 'field') addField(p);
-  });
+    scene.add(g);
+    placeObjs.set(p, cur);
+    const e = cur;
+    cur = null;
+    return e;
+  }
+
+  function removePlace(p) {
+    const e = placeObjs.get(p);
+    if (!e) return;
+    scene.remove(e.group);
+    e.group.traverse(function (o2) {
+      if (o2.geometry) o2.geometry.dispose();
+      if (o2.material) [].concat(o2.material).forEach(function (m) { if (m.map) m.map.dispose(); m.dispose(); });
+    });
+    e.signs.forEach(function (s) { const i = signs.indexOf(s); if (i >= 0) signs.splice(i, 1); });
+    if (e.building) { const i = buildings.indexOf(e.building); if (i >= 0) buildings.splice(i, 1); }
+    placeObjs.delete(p);
+  }
+
+  // 그룹만 옮겨요 (다시 짓지 않아서 끌 때도 가벼워요)
+  function movePlace(p) {
+    const e = placeObjs.get(p);
+    if (!e) return;
+    e.group.position.set((p.x - e.origin.x) * S, 0, (p.y - e.origin.y) * S);
+    if (e.building) {
+      const c = toV3(p.x + p.w / 2, p.y + p.h / 2);
+      e.building.center.x = c.x;
+      e.building.center.z = c.z;
+    }
+  }
+
+  DATA.PLACES.forEach(addPlace);
 
   function addSign(lines, wM, hM, o2) {
     const s = TX.signTexture(lines, o2);
     signs.push(s);
+    if (cur) cur.signs.push(s);
     return new THREE.Mesh(
       new THREE.PlaneGeometry(wM, hM),
       new THREE.MeshStandardMaterial({ map: s.texture, transparent: true, roughness: 0.6 })
@@ -130,10 +181,10 @@ export function buildWorld(scene, o) {
   }
 
   function addBuilding(p) {
-    const floors = FLOORS[p.id] || 4;
+    const floors = Math.max(1, Math.min(20, p.floors || FLOORS[p.id] || 4));
     const w = p.w * S, d = p.h * S, h = floors * FLOOR_H;
     const c = toV3(p.x + p.w / 2, p.y + p.h / 2);
-    const style = GLASSY[p.id] ? 'glass' : 'normal';
+    const style = (p.glass != null ? p.glass : GLASSY[p.id]) ? 'glass' : 'normal';
     const seed = p.x + p.y;
     const mat = function (tex) { return new THREE.MeshStandardMaterial({ map: tex, roughness: 0.82 }); };
     const side = mat(TX.facadeTexture(p.wall, floors, d, style, false, seed));
@@ -173,14 +224,15 @@ export function buildWorld(scene, o) {
     sign.position.set(0, h - 2, d / 2 + 0.06);
     g.add(sign);
 
-    scene.add(g);
+    cur.group.add(g);
     const fadeMats = [];
     g.traverse(function (o2) {
       if (o2.isMesh) [].concat(o2.material).forEach(function (m) {
         if (fadeMats.indexOf(m) < 0) { m.userData.wasTransparent = m.transparent; fadeMats.push(m); }
       });
     });
-    buildings.push({ place: p, center: c, height: h, mesh: box, mats: fadeMats, opacity: 1 });
+    cur.building = { place: p, center: c, height: h, mesh: box, mats: fadeMats, opacity: 1 };
+    buildings.push(cur.building);
   }
 
   function addGate(p) {
@@ -191,14 +243,14 @@ export function buildWorld(scene, o) {
     [left, right].forEach(function (q) {
       const pil = shadowed(new THREE.Mesh(new THREE.BoxGeometry(2.6, 9, 2.6), stone));
       pil.position.set(q.x, 4.5, q.z);
-      scene.add(pil);
+      cur.group.add(pil);
       const top = shadowed(new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.6, 3.2), dark));
       top.position.set(q.x, 9.3, q.z);
-      scene.add(top);
+      cur.group.add(top);
     });
     const beam = shadowed(new THREE.Mesh(new THREE.BoxGeometry(span + 3.2, 2.2, 1.8), dark));
     beam.position.set((left.x + right.x) / 2, 8.4, left.z);
-    scene.add(beam);
+    cur.group.add(beam);
     [1, -1].forEach(function (side) {
       const sign = addSign([
         { text: '충북대학교', size: 150, color: '#fff8e8' },
@@ -206,7 +258,7 @@ export function buildWorld(scene, o) {
       ], span * 0.8, 2.0, { w: 1536, h: 256 });
       sign.position.set((left.x + right.x) / 2, 8.4, left.z + side * 0.92);
       if (side < 0) sign.rotation.y = Math.PI;
-      scene.add(sign);
+      cur.group.add(sign);
     });
   }
 
@@ -219,14 +271,14 @@ export function buildWorld(scene, o) {
     bank.scale.set(rx + 1.4, rz + 1.4, 1);
     bank.position.set(c.x, 0.04, c.z);
     bank.receiveShadow = true;
-    scene.add(bank);
+    cur.group.add(bank);
     const water = new THREE.Mesh(new THREE.CircleGeometry(1, 64), new THREE.MeshStandardMaterial({ color: 0x3f7f9c, roughness: 0.12, metalness: 0.25, transparent: true, opacity: 0.92 }));
     water.rotation.x = -Math.PI / 2;
     water.scale.set(rx, rz, 1);
     water.position.set(c.x, 0.07, c.z);
     water.receiveShadow = true;
-    scene.add(water);
-    animated.push(function (t) { water.material.color.setHSL(0.55, 0.42, 0.40 + Math.sin(t * 0.6) * 0.015); });
+    cur.group.add(water);
+    cur.anim = (function (t) { water.material.color.setHSL(0.55, 0.42, 0.40 + Math.sin(t * 0.6) * 0.015); });
 
     // 물가 바위
     const rockGeo = new THREE.DodecahedronGeometry(0.7, 0);
@@ -242,7 +294,7 @@ export function buildWorld(scene, o) {
       rocks.setMatrixAt(i, m4.compose(v, q, sc));
     }
     shadowed(rocks);
-    scene.add(rocks);
+    cur.group.add(rocks);
 
     // 연잎
     const pads = new THREE.InstancedMesh(new THREE.CircleGeometry(0.6, 12).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x4f8a3a, roughness: 0.8 }), 26);
@@ -253,24 +305,24 @@ export function buildWorld(scene, o) {
       sc.set(s, 1, s);
       pads.setMatrixAt(i, m4.compose(v, q, sc));
     }
-    scene.add(pads);
+    cur.group.add(pads);
 
     // 정자(물 위의 작은 쉼터)
-    const pv = toV3(520, 1330);
+    const pv = toV3(p.x + 50, p.y + 70);
     const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a3c, roughness: 0.8 });
     const roofM = new THREE.MeshStandardMaterial({ color: 0x4f5a5f, roughness: 0.7 });
     const deck = shadowed(new THREE.Mesh(new THREE.BoxGeometry(5, 0.3, 5), wood));
     deck.position.set(pv.x, 0.6, pv.z);
-    scene.add(deck);
+    cur.group.add(deck);
     [[-2, -2], [2, -2], [-2, 2], [2, 2]].forEach(function (o2) {
       const post = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 3.2, 8), wood));
       post.position.set(pv.x + o2[0], 2.2, pv.z + o2[1]);
-      scene.add(post);
+      cur.group.add(post);
     });
     const proof = shadowed(new THREE.Mesh(new THREE.ConeGeometry(4.4, 1.8, 4), roofM));
     proof.rotation.y = Math.PI / 4;
     proof.position.set(pv.x, 4.6, pv.z);
-    scene.add(proof);
+    cur.group.add(proof);
   }
 
   function addField(p) {
@@ -279,7 +331,7 @@ export function buildWorld(scene, o) {
     f.rotation.x = -Math.PI / 2;
     f.position.set(c.x, 0.03, c.z);
     f.receiveShadow = true;
-    scene.add(f);
+    cur.group.add(f);
     // 골대
     const white = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
     [-1, 1].forEach(function (sd) {
@@ -287,12 +339,12 @@ export function buildWorld(scene, o) {
       [-1.8, 1.8].forEach(function (oz) {
         const post = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2, 6), white));
         post.position.set(gx, 1, c.z + oz);
-        scene.add(post);
+        cur.group.add(post);
       });
       const bar = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.6, 6), white));
       bar.rotation.x = Math.PI / 2;
       bar.position.set(gx, 2, c.z);
-      scene.add(bar);
+      cur.group.add(bar);
     });
   }
 
@@ -392,6 +444,8 @@ export function buildWorld(scene, o) {
   })();
 
   /* ---------------- 나무 (InstancedMesh로 가볍게) ---------------- */
+  //  treeSlots[i] = 나무 i의 [줄기, 잎] 인스턴스 자리 → 관리자 모드에서 건물 아래 나무를 숨길 때 써요
+  const treeSlots = [];
   (function addTrees() {
     const trunkGeo = new THREE.CylinderGeometry(0.18, 0.28, 2.4, 7);
     trunkGeo.translate(0, 1.2, 0);
@@ -417,6 +471,8 @@ export function buildWorld(scene, o) {
       m4.compose(v, q, sc);
       trunks.setMatrixAt(i, m4);
       const k = (Math.sin(i * 12.7) + 1) / 2;
+      const crown = t.kind === 'round' ? round : (t.kind === 'pine' ? pine : blossom);
+      treeSlots.push({ m: m4.clone(), hidden: false, parts: [[trunks, i], [crown, idx[t.kind]]] });
       if (t.kind === 'round') { round.setMatrixAt(idx.round, m4); round.setColorAt(idx.round++, col.setHSL(0.25 + k * 0.06, 0.45, 0.33 + k * 0.08)); }
       else if (t.kind === 'pine') { pine.setMatrixAt(idx.pine, m4); pine.setColorAt(idx.pine++, col.setHSL(0.36 + k * 0.04, 0.4, 0.24 + k * 0.05)); }
       else { blossom.setMatrixAt(idx.blossom, m4); blossom.setColorAt(idx.blossom++, col.setHSL(0.95 + k * 0.03, 0.62, 0.8 + k * 0.06)); }
@@ -425,33 +481,49 @@ export function buildWorld(scene, o) {
   })();
 
   /* ---------------- 가로등 (큰길 양쪽) ---------------- */
-  (function addLamps() {
-    const xs = [1200 - 52, 1200 + 52];
+  // 정문에서 북쪽으로 가는 큰길(정문 가운데를 지나는 세로 길) 양쪽에 세워요. 길을 바꾸면 다시 세워요.
+  const lampGroup = new THREE.Group();
+  scene.add(lampGroup);
+  const lampMats = [
+    new THREE.MeshStandardMaterial({ color: 0x3e4447, roughness: 0.5, metalness: 0.4 }),
+    new THREE.MeshStandardMaterial({ color: 0xfff6dc, emissive: 0xffe9b0, emissiveIntensity: 0.35 })
+  ];
+  const poleGeo = new THREE.CylinderGeometry(0.07, 0.1, 4.6, 6); poleGeo.translate(0, 2.3, 0);
+  const headGeo = new THREE.SphereGeometry(0.28, 10, 8); headGeo.translate(0, 4.75, 0);
+  function buildLamps() {
+    lampGroup.children.slice().forEach(function (m) { lampGroup.remove(m); m.dispose(); });
+    const gate = DATA.PLACES.find(function (p) { return p.type === 'gate'; });
+    if (!gate) return;
+    const cx = gate.x + gate.w / 2;
+    const main = DATA.ROADS.find(function (r) { return r.x1 === r.x2 && Math.abs(r.x1 - cx) < 20; });
+    if (!main) return;
+    const top = Math.min(main.y1, main.y2), xs = [main.x1 - main.w / 2 - 14, main.x1 + main.w / 2 + 14];
     const spots = [];
-    for (let y = 230; y < 1600; y += 110) {
-      xs.forEach(function (x) {
-        const others = DATA.ROADS.filter(function (r) { return r.x1 !== 1200 || r.x2 !== 1200; });
-        if (others.some(function (r) { return Math.abs(r.y1 - y) < r.w && r.y1 === r.y2; })) return;
-        spots.push(toV3(x, y));
-      });
+    for (let y = top + 80; y < gate.y; y += 110) {
+      // 가로 길과 만나는 곳은 비워요
+      if (DATA.ROADS.some(function (r) {
+        return r !== main && r.y1 === r.y2 && Math.abs(r.y1 - y) < r.w && Math.min(r.x1, r.x2) < main.x1 && Math.max(r.x1, r.x2) > main.x1;
+      })) continue;
+      xs.forEach(function (x) { spots.push(toV3(x, y)); });
     }
-    const poleGeo = new THREE.CylinderGeometry(0.07, 0.1, 4.6, 6); poleGeo.translate(0, 2.3, 0);
-    const headGeo = new THREE.SphereGeometry(0.28, 10, 8); headGeo.translate(0, 4.75, 0);
-    const poles = new THREE.InstancedMesh(poleGeo, new THREE.MeshStandardMaterial({ color: 0x3e4447, roughness: 0.5, metalness: 0.4 }), spots.length);
-    const heads = new THREE.InstancedMesh(headGeo, new THREE.MeshStandardMaterial({ color: 0xfff6dc, emissive: 0xffe9b0, emissiveIntensity: 0.35 }), spots.length);
+    if (!spots.length) return;
+    const poles = new THREE.InstancedMesh(poleGeo, lampMats[0], spots.length);
+    const heads = new THREE.InstancedMesh(headGeo, lampMats[1], spots.length);
     const m4 = new THREE.Matrix4();
     spots.forEach(function (p, i) { m4.makeTranslation(p.x, 0, p.z); poles.setMatrixAt(i, m4); heads.setMatrixAt(i, m4); });
     shadowed(poles, true, false);
-    scene.add(poles, heads);
-  })();
+    lampGroup.add(poles, heads);
+  }
+  buildLamps();
 
   /* ---------------- 캠퍼스 바깥 (산·아파트) ---------------- */
   (function addSurroundings() {
+    const R = Math.hypot(W, H) * S / 2;   // 캠퍼스 가운데 → 모서리 거리(m). 맵이 커지면 바깥 풍경도 멀어져요
     const hillMat = new THREE.MeshStandardMaterial({ color: 0x6a8a55, roughness: 1, flatShading: true });
     const hillGeo = blobGeometry(1, 3);
     for (let i = 0; i < 14; i++) {
       const a = i / 14 * Math.PI * 2 + 0.3;
-      const d = 420 + Math.abs(Math.sin(i * 5.1)) * 260;
+      const d = R + 270 + Math.abs(Math.sin(i * 5.1)) * 260;
       const hill = new THREE.Mesh(hillGeo, hillMat);
       const s = 120 + Math.abs(Math.sin(i * 2.7)) * 140;
       hill.scale.set(s, s * (0.28 + Math.abs(Math.sin(i * 1.9)) * 0.22), s * 0.8);
@@ -462,7 +534,7 @@ export function buildWorld(scene, o) {
     const roofMat = new THREE.MeshStandardMaterial({ color: 0xb9b2a6 });
     for (let i = 0; i < 16; i++) {
       const a = i / 16 * Math.PI * 2 + 0.15;
-      const d = 190 + Math.abs(Math.sin(i * 3.3)) * 90;
+      const d = R + 40 + Math.abs(Math.sin(i * 3.3)) * 90;
       const h = 30 + Math.abs(Math.sin(i * 7.7)) * 24;
       const b = new THREE.Mesh(new THREE.BoxGeometry(18, h, 12), [blockMat, blockMat, roofMat, roofMat, blockMat, blockMat]);
       b.position.set(Math.cos(a) * d, h / 2, Math.sin(a) * d * 0.85);
@@ -479,6 +551,26 @@ export function buildWorld(scene, o) {
   return {
     ground: ground,
     buildings: buildings,
+    // 관리자 모드용: 장소 다시 짓기·옮기기·지우기, 나무 숨기기
+    addPlace: addPlace,
+    removePlace: removePlace,
+    movePlace: movePlace,
+    rebuildPlace: function (p) { removePlace(p); return addPlace(p); },
+    placeObject: function (p) { return placeObjs.get(p) || null; },
+    roadGroup: roadGroup,
+    rebuildRoads: buildRoads,
+    rebuildLamps: buildLamps,
+    setTreeHidden: function (fn) {
+      const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+      const dirty = new Set();
+      treeSlots.forEach(function (slot, i) {
+        const h = !!fn(trees[i]);
+        if (h === slot.hidden) return;
+        slot.hidden = h;
+        slot.parts.forEach(function (pt) { pt[0].setMatrixAt(pt[1], h ? zero : slot.m); dirty.add(pt[0]); });
+      });
+      dirty.forEach(function (m) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); });
+    },
     // 매 프레임: 하늘을 카메라에 붙이고, 그림자 범위를 초점 주변으로 옮겨요
     update: function (t, camera, focus, spread) {
       sky.position.copy(camera.position);
@@ -491,6 +583,7 @@ export function buildWorld(scene, o) {
         sc.updateProjectionMatrix();
       }
       animated.forEach(function (f) { f(t); });
+      placeObjs.forEach(function (e) { if (e.anim) e.anim(t); });
     }
   };
 }

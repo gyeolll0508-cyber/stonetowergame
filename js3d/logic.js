@@ -9,14 +9,15 @@ const DATA = window.DATA;
 
 export const W = DATA.WORLD.w;
 export const H = DATA.WORLD.h;
-export const S = 0.1; // 1px → 0.1m (캠퍼스 약 240m × 170m)
+export const S = 0.1; // 1px → 0.1m (캠퍼스 약 300m × 210m)
 
 // 게임 좌표(px) ↔ 3D 좌표(m). 2D의 y(아래쪽이 +)는 3D의 z(남쪽이 +)
 export function toV3(x, y) { return { x: (x - W / 2) * S, z: (y - H / 2) * S }; }
 export function fromV3(x, z) { return { x: x / S + W / 2, y: z / S + H / 2 }; }
 
 // 3D 버전에 새로 생긴 "소원 돌탑 마당" (중앙도서관 남쪽 잔디밭)
-export const PLAZA = { name: '소원 돌탑 마당', x: 1465, y: 1400, r: 120 };
+//  (맵을 위·왼쪽으로 넓히면 다른 것들처럼 같이 밀려나요 — DATA.WORLD.ox·oy)
+export const PLAZA = { name: '소원 돌탑 마당', x: 1465 + (DATA.WORLD.ox || 0), y: 1400 + (DATA.WORLD.oy || 0), r: 120 };
 
 export function inPlaza(px, py) {
   return Math.hypot(px - PLAZA.x, py - PLAZA.y) < PLAZA.r;
@@ -105,7 +106,8 @@ export function buildTrees() {
   const r = seeded(7);
   const trees = [];
   let tries = 0;
-  while (trees.length < 150 && tries < 4000) {
+  const count = Math.round(150 * W * H / (2400 * 1700));   // 맵이 넓어지면 나무도 그만큼 많이
+  while (trees.length < count && tries < 6000) {
     tries++;
     const x = 40 + r() * (W - 80), y = 70 + r() * (H - 100);
     if (onRoad(x, y, 30) || blocked(x, y)) continue;
