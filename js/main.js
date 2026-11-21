@@ -65,7 +65,8 @@
     $('myBest').textContent = mine ? mine.best + '층' : '-';
     setGauge($('myGaugeFill'), $('myGaugeLabel'), mine ? mine.best : 0);
     if (!mine) $('myGaugeLabel').textContent = '돌탑을 쌓아 소원을 빌어요';
-    $('btnBuild').innerHTML = mine ? '🪨 내 돌탑 다시 쌓기' : '🪨 여기에 돌탑 쌓기';
+    $('btnBuild').innerHTML = mine ? '🪨 <span class="lbl">내 돌탑 </span>다시 쌓기' : '🪨 여기에 돌탑 쌓기';
+    $('btnGoMine').hidden = !mine;
     Campus.setTowers(Store.towers());
   }
 
@@ -316,6 +317,58 @@
     openWish('create');
   }
 
+  /* ---------------- 내 돌탑 위치 ---------------- */
+
+  const M_PER_PX = 0.1; // 게임 좌표 1px ≈ 0.1m
+
+  function distText(px) {
+    const m = Math.round(px * M_PER_PX);
+    return m < 1000 ? m + 'm' : (m / 1000).toFixed(1) + 'km';
+  }
+
+  function placeOf(t) {
+    return Campus.locationOf ? Campus.locationOf(t.x, t.y) : '';
+  }
+
+  // 내 돌탑 바로 앞으로 이동
+  function goToMine() {
+    const mine = Store.myTower();
+    if (!mine) { toast('아직 내 돌탑이 없어요. 잔디밭에서 ‘여기에 돌탑 쌓기’를 눌러 보세요!'); return; }
+    closeLayers();
+    if (Campus.teleport) Campus.teleport(mine.x, mine.y);
+    else Campus.focus(mine.x, mine.y);
+    Campus.highlight(mine.id);
+    const place = placeOf(mine);
+    toast('📍 내 돌탑 앞으로 왔어요' + (place ? ' · ' + place : ''));
+    setTimeout(function () { if (!currentTowerId) Campus.highlight(null); }, 2500);
+  }
+
+  // 내 돌탑이 화면 밖이면 가장자리에 방향 화살표 표시
+  function updateMyArrow() {
+    requestAnimationFrame(updateMyArrow);
+    const el = $('myArrow');
+    const mine = Store.myTower();
+    const pos = mine && Campus.screenPos ? Campus.screenPos(mine.x, mine.y) : null;
+    const busy = anyLayerOpen() || (window.Stack && Stack.isActive && Stack.isActive());
+    const w = window.innerWidth, h = window.innerHeight;
+    const top = 120, bottom = h - 110, left = 44, right = w - 44;
+    const onScreen = pos && !pos.behind && pos.x > 0 && pos.x < w && pos.y > 60 && pos.y < h - 70;
+    if (!pos || busy || onScreen || right <= left || bottom <= top) { if (!el.hidden) el.hidden = true; return; }
+    const cx = (left + right) / 2, cy = (top + bottom) / 2;
+    let dx = pos.x - cx, dy = pos.y - cy;
+    if (Math.abs(dx) + Math.abs(dy) < 1) dy = 1;
+    const k = Math.min((right - cx) / Math.max(Math.abs(dx), 1e-6), (bottom - cy) / Math.max(Math.abs(dy), 1e-6));
+    const x = cx + dx * k, y = cy + dy * k;
+    const ang = Math.atan2(dy, dx);
+    if (el.hidden) el.hidden = false;
+    el.style.transform = 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) translate(-50%,-50%)';
+    el.querySelector('.arr').style.transform = 'rotate(' + ang.toFixed(3) + 'rad)';
+    const p = Campus.getPlayer();
+    const txt = '⭐ 내 돌탑 · ' + distText(Math.hypot(mine.x - p.x, mine.y - p.y));
+    const t = $('myArrowText');
+    if (t.textContent !== txt) t.textContent = txt;
+  }
+
   /* ---------------- 돌탑 상세 ---------------- */
 
   function openTower(id) {
@@ -331,6 +384,9 @@
     $('twDemo').hidden = !t.demo;
     $('twName').textContent = t.name + '님의 돌탑';
     $('twWish').textContent = '“' + t.wish + '”';
+    const place = placeOf(t);
+    const me = Campus.getPlayer();
+    $('twLoc').textContent = '📍 ' + (place || '캠퍼스') + ' · 여기서 약 ' + distText(Math.hypot(t.x - me.x, t.y - me.y));
     $('twHeight').textContent = t.best + '층';
     setGauge($('twGaugeFill'), $('twGaugeLabel'), t.best);
     $('twOwner').hidden = !mine;
@@ -515,6 +571,8 @@
     $('btnList').addEventListener('click', function () { renderList(); openLayer('sList'); });
     $('btnHelp').addEventListener('click', function () { openLayer('mHelp'); });
     $('btnHelpClose').addEventListener('click', closeLayers);
+    $('btnGoMine').addEventListener('click', goToMine);
+    $('myArrow').addEventListener('click', goToMine);
     $('myCard').addEventListener('click', function () {
       const mine = Store.myTower();
       if (mine) { Campus.focus(mine.x, mine.y); openTower(mine.id); }
@@ -562,6 +620,9 @@
         return;
       }
       if (e.key === 'Escape' && !Stack.isActive()) closeLayers();
+      const tg = e.target;
+      const typing = tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA' || tg.isContentEditable);
+      if (e.code === 'KeyM' && !typing && !anyLayerOpen() && !Stack.isActive() && Store.myTower()) goToMine();
     });
   }
 
@@ -588,8 +649,9 @@
     refreshNet();
     // 서버에서 다른 사람의 돌탑을 받아 오면 캠퍼스·배지를 다시 그려요
     if (Store.onChange) Store.onChange(function () { refreshHud(); refreshNet(); });
-    setupLive();
-    if (prof.created) openWelcome();
+setupLive();
+if (prof.created) openWelcome();
+requestAnimationFrame(updateMyArrow);
   }
 
   window.App = { toast: toast };

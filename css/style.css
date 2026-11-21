@@ -238,6 +238,46 @@ body.stacking .mode-link { display: none; }
 .actionbar .btn.primary { font-size: 18px; padding: 0 22px; min-height: 52px; }
 .actionbar .btn { min-height: 52px; }
 .actionbar .btn.icon { width: 52px; }
+.actionbar .btn.go-mine { background: #ffe2a8; }
+.actionbar .btn.go-mine:hover { background: #fff0cf; }
+.actionbar .lbl-s { display: none; }
+.actionbar [hidden] { display: none; }
+
+/* ---------------- 내 돌탑 방향 화살표 ---------------- */
+
+.my-arrow {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px 4px 6px;
+  border: 2.5px solid var(--line);
+  border-radius: 999px;
+  background: #ffe2a8;
+  box-shadow: 0 3px 0 var(--line);
+  color: var(--ink);
+  font-family: 'Jua', sans-serif;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  will-change: transform;
+}
+.my-arrow[hidden] { display: none; }
+.my-arrow .arr {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--line);
+  color: #ffe2a8;
+  font-size: 12px;
+  line-height: 1;
+}
+.my-arrow:active { box-shadow: 0 1px 0 var(--line); }
 
 /* 2D ↔ 3D 전환 링크 (두 화면 공통) */
 .mode-link {
@@ -495,6 +535,11 @@ body.stacking .mode-link { display: none; }
 .mine-badge { background: #ffe2a8; }
 .demo-badge { background: #e7e3f6; }
 .tw-name { margin: 10px 0 4px !important; }
+.tw-loc {
+  margin: -6px 0 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
 .tw-wish {
   margin: 8px 0 14px;
   padding: 12px 14px;
@@ -758,6 +803,10 @@ body.stacking .mode-link { display: none; }
   .actionbar .btn { font-size: 15px; padding: 0 14px; }
   .actionbar .btn.primary { font-size: 16px; padding: 0 16px; }
   .actionbar .lbl { display: none; }
+  .actionbar .lbl-s { display: inline; }
+  .actionbar .btn, .actionbar .btn.primary { font-size: 14.5px; padding: 0 11px; }
+  .actionbar .btn.icon { width: 46px; padding: 0; }
+  .actionbar { gap: 5px; }
   .zoom { top: auto; bottom: calc(86px + var(--safe-bottom)); transform: none; }
   .hud-card { padding: 5px 8px; }
   .hud-card b { font-size: 18px; }
