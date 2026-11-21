@@ -52,6 +52,7 @@
     <button id="zoomOut" type="button" aria-label="축소">－</button>
     <button id="rotLeft" class="rot" type="button" aria-label="시점 왼쪽으로 돌리기" title="시점 회전 (Q)">⟲</button>
     <button id="rotRight" class="rot" type="button" aria-label="시점 오른쪽으로 돌리기" title="시점 회전 (E)">⟳</button>
+    <button id="campusBgm" class="bgm" data-bgm-toggle type="button" aria-pressed="true" aria-label="배경음악 켜기/끄기" title="배경음악 끄기 (M)">🎵</button>
   </div>
 
   <nav class="actionbar">
@@ -173,6 +174,7 @@
       </div>
     </div>
     <div id="skWish" class="sk-wish"></div>
+    <button id="skBgm" class="bgm-btn" data-bgm-toggle type="button" aria-pressed="true" aria-label="배경음악 켜기/끄기" title="배경음악 끄기 (M)">🎵</button>
     <div id="skTip" class="sk-tip">화면을 탭하면 돌이 떨어져요 👇</div>
     <div id="skBottom" class="stack-bottom">
       <div id="skTray" class="tray"></div>
@@ -262,7 +264,7 @@
         // WebGL이 이미 붙은 캔버스는 2D로 못 쓰므로 새 캔버스로 교체
         const old = document.getElementById('campus');
         old.replaceWith(old.cloneNode(false));
-        document.querySelectorAll('.zoom .rot').forEach(function (b) { b.hidden = true; });
+        document.querySelectorAll('.zoom .rot, [data-bgm-toggle]').forEach(function (b) { b.hidden = true; });
         return load('js/campus.js').then(function () { return load('js/stack.js'); });
       }).then(function () {
         return load('js/main.js');

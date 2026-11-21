@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { makeStone, noise } from './actors.js';
 import { TONES, validTone, paintStone } from './tones.js';
+import Bgm from './bgm.js';
 import * as TX from './textures.js';
 
 const DATA = window.DATA, STONES = window.STONES, Store = window.Store;
@@ -296,6 +297,7 @@ function showResult(reason) {
   }
   if (res.isRecord) emoji = res.best >= DATA.GAUGE_MAX ? '🌟' : '🏆';
   if (h === 0 && reason !== 'finish') note += ' (0층은 기록되지 않아요)';
+  if (reason === 'finish' && h > 0) Bgm.sfx('success'); // 돌탑 완성 효과음
   el.rsEmoji.textContent = emoji;
   el.rsTitle.textContent = title;
   el.rsHeight.textContent = h + '층';
@@ -679,6 +681,7 @@ function buildScene() {
 
 function updateHud() {
   const h = height();
+  Bgm.setLevel(h); // 돌탑 높이에 따라 배경음악 단계(1~3층 / 4~6층 / 7층~)
   el.skHeight.textContent = h;
   el.skBest.textContent = Math.max(tower.best, 0);
   let lv = 'Lv.' + (1 + Math.floor(h / 3));
@@ -801,6 +804,7 @@ function close() {
   }
   running = false;
   cancelAnimationFrame(rafId);
+  Bgm.play('campus'); // 캠퍼스로 돌아가면 돌탑 음악 → 캠퍼스 음악 (자연스럽게 교차)
   endDecor();
   clearScene();
   el.scene.hidden = true;
@@ -874,6 +878,7 @@ function init() {
   });
   window.addEventListener('keydown', onKey);
   window.addEventListener('resize', function () { if (running) resize(); });
+  // 배경음악 ON/OFF 버튼(#skBgm)·M 키·첫 클릭 재생은 bgm.js에서 두 화면 공통으로 처리해요.
 }
 
 /* ---------------- 공개 API (2D의 window.Stack과 동일) ---------------- */
@@ -899,8 +904,11 @@ const Stack = {
     running = true;
     lastT = performance.now();
     rafId = requestAnimationFrame(loop);
+    Bgm.play('stack'); // 캠퍼스 음악 → 돌탑 음악 (버튼 클릭으로 열리므로 자동재생 제한 없음, OFF면 재생 안 함)
   },
   isActive: function () { return running; },
+  // 테스트용(읽기 전용): 배경음악 상태
+  bgm: function () { return Bgm.debug(); },
   // 테스트·디버그용(읽기 전용) 상태 확인
   debug: function () {
     return {

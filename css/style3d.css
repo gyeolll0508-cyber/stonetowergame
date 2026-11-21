@@ -121,6 +121,27 @@ body.stacking .mode-link { display: none; }
 .tone-swatch.rainbow { background: linear-gradient(90deg, #ff6b6b, #ffa94d, #ffd43b, #69db7c, #4dabf7, #5c7cfa, #b197fc); }
 .stack-scene.decorating .stack-bottom { display: none; }
 
+/* 배경음악 ON/OFF 버튼 (캠퍼스 ＋－ 버튼과 같은 모양) */
+.bgm-btn {
+  position: absolute;
+  top: calc(84px + var(--safe-top));
+  right: 12px;
+  z-index: 7;
+  width: 42px;
+  height: 42px;
+  border: 2.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--line);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.bgm-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+.bgm-btn:focus-visible { outline: 3px solid #6c9ef0; outline-offset: 2px; }
+.bgm-btn.off, .zoom .bgm.off { background: #ece6da; }
+.zoom .bgm { font-size: 19px; }
+
 /* 처음 불러오는 동안 */
 .loading3d {
   position: fixed;
