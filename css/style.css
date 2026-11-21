@@ -181,6 +181,24 @@ kbd {
 .badge.ok { background: #e3f5e2; }
 .badge.warn { background: #ffe9c7; }
 
+/* ---------------- 2D ↔ 3D 전환 링크 ---------------- */
+.mode-link {
+  position: fixed;
+  left: 12px;
+  bottom: calc(86px + var(--safe-bottom));
+  z-index: 10;
+  padding: 6px 12px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--line);
+  color: var(--ink);
+  font-family: 'Jua', sans-serif;
+  font-size: 13px;
+  text-decoration: none;
+}
+body.stacking .mode-link { display: none; }
+
 /* ---------------- 확대·축소 ---------------- */
 
 .zoom {
@@ -220,6 +238,24 @@ kbd {
 .actionbar .btn.primary { font-size: 18px; padding: 0 22px; min-height: 52px; }
 .actionbar .btn { min-height: 52px; }
 .actionbar .btn.icon { width: 52px; }
+
+/* 2D ↔ 3D 전환 링크 (두 화면 공통) */
+.mode-link {
+  position: fixed;
+  left: 12px;
+  bottom: calc(86px + var(--safe-bottom));
+  z-index: 10;
+  padding: 6px 12px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--line);
+  color: var(--ink);
+  font-family: 'Jua', sans-serif;
+  font-size: 13px;
+  text-decoration: none;
+}
+body.stacking .mode-link { display: none; }
 
 /* ---------------- 토스트 ---------------- */
 
@@ -280,6 +316,44 @@ kbd {
   transition: opacity .2s, transform .2s, visibility .2s;
 }
 .modal.open { transform: translate(-50%, -50%) scale(1); }
+.modal.wide { width: min(92vw, 400px); }
+
+/* 처음 입장 창: [닉네임·색] 옆에 [캐릭터 꾸미기] (좁은 화면은 위아래) */
+.welcome-cols { display: flex; flex-direction: column; gap: 4px; }
+.welcome-main { min-width: 0; }
+.deco {
+  margin: 4px 0 14px;
+  padding: 10px 12px 12px;
+  border: 2px dashed var(--line);
+  border-radius: 16px;
+  background: var(--paper-2);
+}
+.deco h3 { margin: 0 0 6px; font-size: 16px; font-family: 'Jua', sans-serif; font-weight: 400; text-align: center; }
+.deco-preview { display: block; width: 100%; height: 120px; }
+.deco-label { margin: 8px 0 4px; font-weight: 700; font-size: 13px; }
+.deco-opts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.deco-opt {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 4px 2px 3px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  font: inherit; font-size: 11px; line-height: 1.2;
+  color: var(--ink);
+  cursor: pointer;
+}
+.deco-opt canvas { width: 40px; height: 40px; }
+.deco-opt.on { background: #ffe2a8; box-shadow: 0 0 0 2px #e0952f; }
+.deco-opt:active { transform: scale(.95); }
+.swatches.sm { gap: 8px; }
+.swatches.sm .swatch { width: 28px; height: 28px; }
+@media (min-width: 700px) {
+  .modal.wide { width: min(94vw, 720px); }
+  .welcome-cols { flex-direction: row; gap: 18px; align-items: flex-start; }
+  .welcome-main { flex: 1; }
+  .deco { flex: 1.15; margin-top: 12px; }
+  .deco-preview { height: 150px; }
+}
 .modal h2 { margin: 0 0 8px; font-size: 24px; text-align: center; }
 .modal .sub { margin: 0 0 14px; text-align: center; line-height: 1.6; font-size: 15px; }
 .modal-hero { font-size: 44px; text-align: center; letter-spacing: 4px; animation: bob 2.4s ease-in-out infinite; }
@@ -301,6 +375,13 @@ kbd {
 }
 .field input:focus, .field textarea:focus, .cheer-form input:focus { border-color: #e0952f; box-shadow: 0 0 0 3px rgba(255, 184, 77, .35); }
 
+.field > .name-row { display: flex; justify-content: flex-start; gap: 8px; margin: 0; font-weight: 400; }
+.name-row input { flex: 1; min-width: 0; }
+.dice {
+  flex: none; width: 46px; border: 2px solid var(--line); border-radius: 12px;
+  background: var(--paper); font-size: 20px; cursor: pointer;
+}
+.dice:active { transform: scale(.92); }
 .swatches { display: flex; flex-wrap: wrap; gap: 10px; }
 .swatch {
   width: 36px; height: 36px;

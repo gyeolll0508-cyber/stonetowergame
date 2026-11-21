@@ -4,8 +4,8 @@
  *  - 돌탑: 최고 기록(best)만큼 돌을 쌓아 보여 줘요(2D 지도와 같은 규칙).
  * ========================================================= */
 import * as THREE from 'three';
-import { toV3 } from './logic.js';
-import { glowTexture } from './textures.js';
+import { toV3 } from './logic.js?v=2026112105';
+import { glowTexture } from './textures.js?v=2026112105';
 import { paintStone } from './tones.js';
 
 const DATA = window.DATA, STONES = window.STONES;
@@ -197,53 +197,266 @@ export function makeTower(t) {
   };
 }
 
-/* ---------------- 캐릭터 ---------------- */
+/* ---------------- 캐릭터 ----------------
+ * 말랑한 점토 인형 느낌의 2등신 꼬마
+ *  - 밝은 살구빛 큰 얼굴 + 웃는 눈(^ ^) + 작은 ω 입 + 분홍 볼
+ *  - 까만 바가지 머리
+ *  - 과잠(야구점퍼): 몸통 = 내가 고른 색, 소매 = 크림색,
+ *    줄무늬 목깃·소매 끝·밑단, 똑딱단추, 가슴 와펜
+ * ------------------------------------------------ */
 
-const bodyGeo = new THREE.CapsuleGeometry(0.3, 0.5, 4, 14);
-const headGeo = new THREE.SphereGeometry(0.31, 20, 14);
-const hairGeo = new THREE.SphereGeometry(0.325, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.52);
-const eyeGeo = new THREE.SphereGeometry(0.045, 8, 6);
-const bagGeo = new THREE.BoxGeometry(0.38, 0.44, 0.2);
-const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdcbf, roughness: 0.7 });
-const hairMat = new THREE.MeshStandardMaterial({ color: 0x3d2f28, roughness: 0.8 });
-const eyeMat = new THREE.MeshBasicMaterial({ color: 0x2a211c });
+const JK_BOTTOM = 0.34, JK_TOP = 0.94;
+// 과잠 몸통 반지름 (높이 y에서) — 아래는 넉넉하고 어깨는 둥글게
+function jacketR(y) {
+  const t = (y - JK_BOTTOM) / (JK_TOP - JK_BOTTOM);
+  return 0.31 - 0.03 * t - 0.09 * Math.pow(Math.max(0, t - 0.7) / 0.3, 2);
+}
+function jacketGeo() {
+  const pts = [new THREE.Vector2(0, JK_BOTTOM)];
+  for (let i = 0; i <= 24; i++) {
+    const y = JK_BOTTOM + (JK_TOP - JK_BOTTOM) * i / 24;
+    pts.push(new THREE.Vector2(jacketR(y), y));
+  }
+  pts.push(new THREE.Vector2(0, JK_TOP));
+  return new THREE.LatheGeometry(pts, 32);
+}
 
-export function makeCharacter(color) {
+// 가슴 와펜(크림색 "C" 글자)
+let patchTex = null;
+function patchTexture() {
+  if (patchTex) return patchTex;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 128;
+  const g = cv.getContext('2d');
+  g.font = 'bold 110px "Arial Black", Arial, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.lineJoin = 'round';
+  g.lineWidth = 14;
+  g.strokeStyle = '#3a3550';
+  g.strokeText('C', 64, 70);
+  g.fillStyle = '#fff6e6';
+  g.fillText('C', 64, 70);
+  patchTex = new THREE.CanvasTexture(cv);
+  patchTex.colorSpace = THREE.SRGBColorSpace;
+  return patchTex;
+}
+
+// 웃는 눈(∩)·입(ω)에 쓰는 반원 고리
+const arcGeo = new THREE.TorusGeometry(0.048, 0.013, 6, 14, Math.PI);
+const mouthGeo = new THREE.TorusGeometry(0.024, 0.009, 6, 10, Math.PI);
+
+const bodyGeo = jacketGeo();
+const ribGeo = new THREE.TorusGeometry(1, 0.045, 8, 32);
+const stripeGeo = new THREE.TorusGeometry(1, 0.012, 6, 32);
+const armGeo = new THREE.CapsuleGeometry(0.095, 0.24, 6, 12);
+const cuffGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.06, 14);
+const handGeo = new THREE.SphereGeometry(0.075, 14, 10);
+const legGeo = new THREE.CapsuleGeometry(0.09, 0.12, 6, 12);
+const shoeGeo = new THREE.SphereGeometry(0.1, 14, 10);
+const snapGeo = new THREE.SphereGeometry(0.022, 8, 6);
+const patchGeo = new THREE.PlaneGeometry(0.15, 0.15);
+const headGeo = new THREE.SphereGeometry(0.43, 32, 24);
+const hairGeo = new THREE.SphereGeometry(0.455, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.52);
+const blushGeo = new THREE.CircleGeometry(0.065, 18);
+// 헤어스타일 부품
+const shortHairGeo = new THREE.SphereGeometry(0.45, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.42);
+const tuftGeo = new THREE.SphereGeometry(0.08, 12, 8);
+const longBackGeo = new THREE.SphereGeometry(0.4, 24, 16);
+const sideLockGeo = new THREE.CapsuleGeometry(0.07, 0.2, 4, 10);
+const braidGeo = new THREE.SphereGeometry(0.085, 14, 10);
+const ribbonGeo = new THREE.SphereGeometry(0.05, 10, 8);
+const bunGeo = new THREE.SphereGeometry(0.17, 20, 14);
+// 표정 부품
+const dotEyeGeo = new THREE.SphereGeometry(0.04, 12, 10);
+const smileGeo = new THREE.TorusGeometry(0.05, 0.011, 6, 14, Math.PI);
+const lineGeo = new THREE.CapsuleGeometry(0.011, 0.07, 3, 6);
+const oMouthGeo = new THREE.TorusGeometry(0.028, 0.012, 6, 16);
+
+const skinMat = new THREE.MeshStandardMaterial({ color: 0xffe3cf, roughness: 0.6 });
+const ribbonMat = new THREE.MeshStandardMaterial({ color: 0xe8534a, roughness: 0.6 });
+const wowMat = new THREE.MeshBasicMaterial({ color: 0xc4584e });
+const hairMat = new THREE.MeshStandardMaterial({ color: 0x231d1c, roughness: 0.5, side: THREE.DoubleSide });
+const faceMat = new THREE.MeshBasicMaterial({ color: 0x3a2a24 });
+const blushMat = new THREE.MeshBasicMaterial({ color: 0xff9aa2, transparent: true, opacity: 0.55, depthWrite: false });
+const sleeveMat = new THREE.MeshStandardMaterial({ color: 0xf6efe2, roughness: 0.8 });
+const ribMat = new THREE.MeshStandardMaterial({ color: 0x34324a, roughness: 0.85 });
+const stripeMat = new THREE.MeshStandardMaterial({ color: 0xf6efe2, roughness: 0.8 });
+const snapMat = new THREE.MeshStandardMaterial({ color: 0xf2ece0, roughness: 0.4, metalness: 0.2 });
+const pantsMat = new THREE.MeshStandardMaterial({ color: 0x3d4a6e, roughness: 0.85 });
+const shoeMat = new THREE.MeshStandardMaterial({ color: 0xfaf7f2, roughness: 0.7 });
+
+export function makeCharacter(color, look) {
   const root = new THREE.Group();
   const body = new THREE.Group(); // 걸을 때 통통 튀는 부분
   root.add(body);
-  const clothMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.75 });
-  const bagMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.62), roughness: 0.8 });
+  const jacketMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.78 });
+  const patchMat = new THREE.MeshBasicMaterial({ map: patchTexture(), transparent: true, depthWrite: false });
+  const meshes = [];
+  function add(geo, mat, x, y, z, parent) {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    (parent || body).add(m);
+    meshes.push(m);
+    return m;
+  }
+  // 몸통을 감싸는 줄무늬 고리(밑단·목깃)
+  function ring(y, r, stripes) {
+    const rb = add(ribGeo, ribMat, 0, y, 0);
+    rb.rotation.x = Math.PI / 2;
+    rb.scale.set(r, r, 1);
+    stripes.forEach(function (dy) {
+      const st = add(stripeGeo, stripeMat, 0, y + dy, 0);
+      st.rotation.x = Math.PI / 2;
+      const sr = r + 0.04;
+      st.scale.set(sr, sr, 1);
+    });
+  }
 
-  const torso = new THREE.Mesh(bodyGeo, clothMat);
-  torso.position.y = 0.62;
-  const head = new THREE.Mesh(headGeo, skinMat);
-  head.position.y = 1.36;
-  const hair = new THREE.Mesh(hairGeo, hairMat);
-  hair.position.set(0, 1.39, -0.02);
-  hair.rotation.x = -0.35;
-  const bag = new THREE.Mesh(bagGeo, bagMat);
-  bag.position.set(0, 0.72, -0.3);
-  [torso, head, hair, bag].forEach(function (m) { m.castShadow = true; body.add(m); });
-  [-0.11, 0.11].forEach(function (x) {
-    const eye = new THREE.Mesh(eyeGeo, eyeMat);
-    eye.position.set(x, 1.38, 0.28);
-    body.add(eye);
+  // 다리 + 신발 (엉덩이 높이에서 앞뒤로 흔들리게)
+  const legs = [-0.12, 0.12].map(function (x) {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, 0.32, 0);
+    root.add(pivot);
+    add(legGeo, pantsMat, 0, -0.14, 0, pivot);
+    const shoe = add(shoeGeo, shoeMat, 0, -0.27, 0.04, pivot);
+    shoe.scale.set(1, 0.6, 1.35);
+    return pivot;
   });
+
+  // 과잠 몸통
+  add(bodyGeo, jacketMat, 0, 0, 0);
+  ring(JK_BOTTOM + 0.02, jacketR(JK_BOTTOM) - 0.01, [0.02]);   // 밑단
+  ring(JK_TOP - 0.01, 0.15, [-0.015]);                            // 목깃
+  // 똑딱단추 4개 (앞 가운데)
+  [0.46, 0.58, 0.7, 0.82].forEach(function (y) { add(snapGeo, snapMat, 0, y, jacketR(y) + 0.006); });
+  // 가슴 와펜
+  const px = -0.13, py = 0.74;
+  const pz = Math.sqrt(Math.max(0, jacketR(py) * jacketR(py) - px * px)) + 0.008;
+  const patch = new THREE.Mesh(patchGeo, patchMat);
+  patch.position.set(px, py, pz);
+  patch.rotation.y = Math.atan2(px, pz);
+  body.add(patch);
+
+  // 크림색 소매 + 줄무늬 소매 끝 + 손 (어깨에서 흔들리게)
+  const arms = [-1, 1].map(function (side) {
+    const pivot = new THREE.Group();
+    pivot.position.set(side * 0.25, 0.86, 0);
+    pivot.rotation.z = side * 0.4;
+    body.add(pivot);
+    add(armGeo, sleeveMat, 0, -0.18, 0, pivot);
+    add(cuffGeo, ribMat, 0, -0.35, 0, pivot);
+    add(handGeo, skinMat, 0, -0.42, 0, pivot);
+    return pivot;
+  });
+
+  // 머리 (살짝 납작한 큰 얼굴) — 머리카락·표정은 setLook으로 바꿔 끼워요
+  const head = new THREE.Group();
+  head.position.y = 1.35;
+  body.add(head);
+  const face = add(headGeo, skinMat, 0, 0, 0, head);
+  face.scale.set(1.04, 0.96, 1);
+  const hairG = new THREE.Group(), faceG = new THREE.Group();
+  const myHairMat = hairMat.clone();   // 캐릭터마다 머리색이 달라서 따로
+  head.add(hairG, faceG);
+
+  function part(group, geo, mat, x, y, z) {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    m.castShadow = group === hairG;
+    group.add(m);
+    return m;
+  }
+  // 얼굴 앞면의 점 (x, y) → 머리 표면 위에 붙이기
+  function onFace(geo, mat, x, y, lift) {
+    const z = Math.sqrt(Math.max(0, 0.43 * 0.43 - x * x / 1.08 - y * y / 0.92)) + (lift || 0.004);
+    const m = part(faceG, geo, mat, x, y, z);
+    m.rotation.y = Math.atan2(x, z) * 0.9;
+    m.rotation.x = -Math.atan2(y, z) * 0.9;
+    return m;
+  }
+
+  function buildHair(id) {
+    hairG.clear();
+    if (id === 'short') {
+      const cap = part(hairG, shortHairGeo, myHairMat, 0, 0.04, -0.02);
+      cap.rotation.x = -0.18;
+      cap.scale.set(1.04, 0.96, 1);
+      part(hairG, tuftGeo, myHairMat, 0.07, 0.43, 0.04).scale.set(1, 0.7, 1);
+      return;
+    }
+    const bowl = part(hairG, hairGeo, myHairMat, 0, 0.03, -0.015);
+    bowl.rotation.x = -0.3;
+    bowl.scale.set(1.04, 0.96, 1);
+    if (id === 'long') {
+      part(hairG, longBackGeo, myHairMat, 0, -0.22, -0.14).scale.set(1.08, 1.35, 0.75);
+    }
+    if (id === 'long' || id === 'twin') {
+      [-1, 1].forEach(function (s) { part(hairG, sideLockGeo, myHairMat, s * 0.4, -0.1, 0.07); });
+    }
+    if (id === 'twin') {
+      [-1, 1].forEach(function (s) {
+        for (let i = 0; i < 3; i++) {
+          part(hairG, braidGeo, myHairMat, s * (0.43 + i * 0.01), -0.28 - i * 0.13, -0.03).scale.setScalar(1 - i * 0.1);
+        }
+        part(hairG, ribbonGeo, ribbonMat, s * 0.455, -0.62, -0.03).scale.set(1.4, 0.8, 0.8);
+      });
+    }
+    if (id === 'bun') part(hairG, bunGeo, myHairMat, 0, 0.47, -0.1);
+  }
+
+  function buildFace(id) {
+    faceG.clear();
+    const smileM = function (y) { onFace(smileGeo, faceMat, 0, y).rotation.z = Math.PI; };  // ∪ 입
+    const dotE = function (x, k) { onFace(dotEyeGeo, faceMat, x, -0.03).scale.set(k || 1, (k || 1) * 1.25, 0.5); };
+    if (id === 'dot') {
+      dotE(-0.14); dotE(0.14); smileM(-0.13);
+    } else if (id === 'wink') {
+      dotE(-0.14); onFace(arcGeo, faceMat, 0.14, -0.04); smileM(-0.13);
+    } else if (id === 'wow') {
+      dotE(-0.14, 1.25); dotE(0.14, 1.25);
+      onFace(oMouthGeo, wowMat, 0, -0.16);
+    } else if (id === 'sleepy') {
+      [-0.14, 0.14].forEach(function (x) { onFace(lineGeo, faceMat, x, -0.04).rotation.z = Math.PI / 2; });
+      onFace(lineGeo, faceMat, 0, -0.15).rotation.z = Math.PI / 2;
+    } else { // smile ^ ^ ω
+      [-0.14, 0.14].forEach(function (x) { onFace(arcGeo, faceMat, x, -0.04); });
+      [-0.024, 0.024].forEach(function (x) { onFace(mouthGeo, faceMat, x, -0.15).rotation.z = Math.PI; });
+    }
+    // 분홍 볼
+    [-0.25, 0.25].forEach(function (x) { onFace(blushGeo, blushMat, x, -0.13, 0.012); });
+  }
+
+  function setLook(look) {
+    const l = DATA.normLook(look);
+    myHairMat.color.set(DATA.hairHex(l.hairColor));
+    buildHair(l.hair);
+    buildFace(l.face);
+  }
+  setLook(look);
+
+  meshes.forEach(function (m) { m.castShadow = true; });
 
   return {
     root: root,
-    setColor: function (c) {
-      clothMat.color.set(c);
-      bagMat.color.set(c).multiplyScalar(0.62);
-    },
+    setColor: function (c) { jacketMat.color.set(c); },
+    setLook: setLook,
     animate: function (walkTime, moving) {
       if (moving) {
-        body.position.y = Math.abs(Math.sin(walkTime * 11)) * 0.12;
-        body.rotation.z = Math.sin(walkTime * 11) * 0.06;
+        const s = Math.sin(walkTime * 11);
+        body.position.y = Math.abs(s) * 0.08;
+        body.rotation.z = s * 0.05;
+        head.rotation.z = -s * 0.04;
+        legs[0].rotation.x = s * 0.6;
+        legs[1].rotation.x = -s * 0.6;
+        arms[0].rotation.x = -s * 0.5;
+        arms[1].rotation.x = s * 0.5;
       } else {
         body.position.y *= 0.8;
         body.rotation.z *= 0.8;
+        head.rotation.z *= 0.8;
+        legs.forEach(function (l) { l.rotation.x *= 0.8; });
+        arms.forEach(function (a) { a.rotation.x *= 0.8; });
       }
     }
   };
