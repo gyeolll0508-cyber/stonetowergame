@@ -34,9 +34,93 @@ body.stacking #labels3d { display: none; }
 .lb3.tower.mine { background: #ffe2a8; }
 .lb3.me { background: var(--primary-2); font-size: 13px; }
 .lb3.npc { font-size: 11px; opacity: .85; border-width: 1.5px; }
+.lb3.peer { background: #fff; font-size: 12.5px; }
+
+/* 머리 위 말풍선 (이름표 바로 위) */
+.lb3.bubble {
+  margin-top: -30px;
+  max-width: 220px;
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: #fff;
+  font-family: 'Gowun Dodum', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-align: center;
+  animation: bubbleIn .18s ease-out;
+}
+.lb3.bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  width: 10px;
+  height: 10px;
+  margin-left: -6px;
+  border-right: 2px solid var(--line);
+  border-bottom: 2px solid var(--line);
+  background: #fff;
+  transform: rotate(45deg);
+}
+@keyframes bubbleIn { from { opacity: 0; margin-top: -22px; } }
+
+/* 말풍선 입력창 (아래 버튼 줄 바로 위) */
+.chatbar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(80px + var(--safe-bottom));
+  z-index: 11;
+  display: flex;
+  gap: 6px;
+  width: min(440px, calc(100vw - 24px));
+  padding: 6px;
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--line);
+  transform: translateX(-50%);
+}
+.chatbar[hidden] { display: none; }
+.chatbar input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  font-size: 16px;
+  outline: none;
+}
+.chatbar input:focus { border-color: #e0952f; }
+.chatbar .btn { min-height: 40px; padding: 0 14px; }
+#btnChat { position: relative; }
+#btnChat[hidden] { display: none; }
+#btnChat small {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 20px;
+  padding: 1px 5px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: #4fd17a;
+  font-size: 11px;
+  line-height: 14px;
+}
+#btnChat small:empty { display: none; }
+body.stacking .chatbar, body.stacking #btnChat { display: none; }
 
 /* 시점 회전 버튼 (확대·축소 버튼과 같은 모양) */
 .zoom .rot { font-size: 20px; }
+.zoom .rot[hidden] { display: none; }
+#tiltUp, #tiltDown { font-size: 16px; }
+.zoom button { touch-action: none; user-select: none; -webkit-user-select: none; }
+/* 버튼이 6개라 2줄로: [＋ －] [⟲ ⟳] [▲ ▼] */
+.zoom { display: grid; grid-template-columns: repeat(2, 42px); }
 
 /* 3D 돌 쌓기: 떠오르는 글자(+1층, 아슬아슬!)와 15층 별 */
 .sk3d-layer {

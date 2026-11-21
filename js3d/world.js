@@ -5,8 +5,8 @@
  *    단순화한 것이에요. 층수는 게임용 추정값이에요.
  * ========================================================= */
 import * as THREE from 'three';
-import { S, W, H, toV3, PLAZA, onRoad, hedgeRects } from './logic.js';
-import * as TX from './textures.js';
+import { S, W, H, toV3, PLAZA, onRoad, hedgeRects } from './logic.js?v=2026112105';
+import * as TX from './textures.js?v=2026112105';
 
 const DATA = window.DATA;
 
