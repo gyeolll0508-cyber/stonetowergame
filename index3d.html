@@ -52,6 +52,7 @@
     <button id="zoomOut" type="button" aria-label="축소">－</button>
     <button id="rotLeft" class="rot" type="button" aria-label="시점 왼쪽으로 돌리기" title="시점 회전 (Q)">⟲</button>
     <button id="rotRight" class="rot" type="button" aria-label="시점 오른쪽으로 돌리기" title="시점 회전 (E)">⟳</button>
+    <button id="campusBgm" class="bgm" data-bgm-toggle type="button" aria-pressed="true" aria-label="배경음악 켜기/끄기" title="배경음악 끄기 (M)">🎵</button>
   </div>
 
   <nav class="actionbar">
@@ -173,6 +174,7 @@
       </div>
     </div>
     <div id="skWish" class="sk-wish"></div>
+    <button id="skBgm" class="bgm-btn" data-bgm-toggle type="button" aria-pressed="true" aria-label="배경음악 켜기/끄기" title="배경음악 끄기 (M)">🎵</button>
     <div id="skTip" class="sk-tip">화면을 탭하면 돌이 떨어져요 👇</div>
     <div id="skBottom" class="stack-bottom">
       <div id="skTray" class="tray"></div>
@@ -194,10 +196,23 @@
         <div class="gauge"><i id="rsGaugeFill"></i></div>
         <small id="rsGaugeLabel"></small>
         <p id="rsNote" class="muted small"></p>
+        <button id="rsDecorate" class="btn wide" type="button" hidden>🎨 돌탑 꾸미기</button>
         <div class="row-btns">
           <button id="rsExit" class="btn" type="button">캠퍼스로</button>
           <button id="rsRetry" class="btn primary" type="button">🔁 다시 도전</button>
         </div>
+      </div>
+    </div>
+    <!-- 돌탑 꾸미기: 색상 테마 고르기 (결과 화면에서 열려요) -->
+    <div id="skDecor" class="decor-bar" hidden>
+      <div class="decor-title">🎨 색상 테마를 골라 보세요</div>
+      <div id="skTones" class="decor-tones">
+        <button class="tone-btn on" data-tone="natural" type="button"><i class="tone-swatch natural"></i>자연석톤</button>
+        <button class="tone-btn" data-tone="pastel" type="button"><i class="tone-swatch pastel"></i>파스텔톤</button>
+        <button class="tone-btn" data-tone="rainbow" type="button"><i class="tone-swatch rainbow"></i>무지개톤</button>
+      </div>
+      <div class="stack-actions">
+        <button id="skDecorDone" class="btn primary" type="button">✅ 꾸미기 완료</button>
       </div>
     </div>
   </section>
@@ -249,7 +264,7 @@
         // WebGL이 이미 붙은 캔버스는 2D로 못 쓰므로 새 캔버스로 교체
         const old = document.getElementById('campus');
         old.replaceWith(old.cloneNode(false));
-        document.querySelectorAll('.zoom .rot').forEach(function (b) { b.hidden = true; });
+        document.querySelectorAll('.zoom .rot, [data-bgm-toggle]').forEach(function (b) { b.hidden = true; });
         return load('js/campus.js').then(function () { return load('js/stack.js'); });
       }).then(function () {
         return load('js/main.js');
