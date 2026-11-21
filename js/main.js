@@ -10,12 +10,14 @@
   const $ = function (id) { return document.getElementById(id); };
 
   let profileColor = DATA.COLORS[0];
+  let profileLook = DATA.normLook(null);   // { hair, face } 캐릭터 꾸미기
   let wishCat = DATA.CATEGORIES[0].id;
   let wishMode = 'create';     // create | edit
   let currentTowerId = null;   // 열려 있는 상세 돌탑
   let listSort = 'height';
   let listCat = 'all';
   let toastTimer = 0;
+  let welcomeFirst = false;    // 처음 입장(랜덤 프로필을 막 만든 상태)
 
   /* ---------------- 공통 UI ---------------- */
 
@@ -119,23 +121,108 @@
     document.querySelectorAll('#colorPick .swatch').forEach(function (b) {
       b.classList.toggle('on', b.dataset.color === c);
     });
+    renderDeco();
+  }
+
+  /* ---------------- 캐릭터 꾸미기 ---------------- */
+
+  const decoOpts = [];   // { kind, id, btn, cv }
+
+  function buildDeco() {
+    [['hair', DATA.HAIRS, 'hairPick'], ['face', DATA.FACES, 'facePick']].forEach(function (g) {
+      const box = $(g[2]);
+      box.innerHTML = '';
+      g[1].forEach(function (o) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'deco-opt';
+        b.setAttribute('role', 'radio');
+        b.title = o.label;
+        const cv = document.createElement('canvas');
+        const lb = document.createElement('span');
+        lb.textContent = o.label;
+        b.appendChild(cv);
+        b.appendChild(lb);
+        b.addEventListener('click', function () {
+          profileLook[g[0]] = o.id;
+          renderDeco();
+        });
+        box.appendChild(b);
+        decoOpts.push({ kind: g[0], id: o.id, btn: b, cv: cv });
+      });
+    });
+  }
+
+  // 머리색 동그라미
+  function buildHairColors() {
+    const box = $('hairColorPick');
+    if (!box) return;
+    box.innerHTML = '';
+    DATA.HAIR_COLORS.forEach(function (c) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'swatch';
+      b.style.background = c.hex;
+      b.dataset.id = c.id;
+      b.title = c.label;
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-label', '머리색 ' + c.label);
+      b.addEventListener('click', function () { profileLook.hairColor = c.id; renderDeco(); });
+      box.appendChild(b);
+    });
+  }
+
+  // 미리보기 + 선택 버튼 그림을 지금 고른 색·머리·표정으로 다시 그려요
+  function renderDeco() {
+    if (!window.AVATAR || !$('decoPreview')) return;
+    AVATAR.preview($('decoPreview'), { color: profileColor, hair: profileLook.hair, face: profileLook.face, hairColor: profileLook.hairColor });
+    document.querySelectorAll('#hairColorPick .swatch').forEach(function (b) {
+      const on = b.dataset.id === profileLook.hairColor;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+    decoOpts.forEach(function (o) {
+      const on = profileLook[o.kind] === o.id;
+      o.btn.classList.toggle('on', on);
+      o.btn.setAttribute('aria-checked', on ? 'true' : 'false');
+      const look = { color: profileColor, hair: profileLook.hair, face: profileLook.face, hairColor: profileLook.hairColor, headOnly: true };
+      look[o.kind] = o.id;
+      AVATAR.preview(o.cv, look);
+    });
   }
 
   function openWelcome() {
     const p = Store.getProfile();
     $('inName').value = p ? p.name : '';
-    pickColor(p ? p.color : DATA.COLORS[Math.floor(Math.random() * DATA.COLORS.length)]);
-    $('btnStart').textContent = p ? '저장하기' : '캠퍼스 입장하기';
+    profileLook = DATA.normLook(p);
+    $('btnStart').textContent = welcomeFirst ? '이 이름으로 입장하기' : '저장하기';
     openLayer('mWelcome');
+    pickColor(p ? p.color : DATA.COLORS[Math.floor(Math.random() * DATA.COLORS.length)]);   // 창이 열린 뒤 그려야 크기가 맞아요
     setTimeout(function () { $('inName').focus(); }, 100);
+  }
+
+  // 🎲 버튼: 닉네임과 색을 새로 뽑아요 (저장은 '저장하기'를 눌러야)
+  function rerollProfile() {
+    $('inName').value = DATA.randomNickname();
+    pickColor(DATA.randomColor(profileColor));
+  }
+
+  // 처음 입장: 랜덤 닉네임·색을 바로 저장해서, 창을 그냥 닫거나
+  // 새로고침해도 같은 프로필이 유지돼요(재접속 시 그대로 사용).
+  function ensureProfile() {
+    let p = Store.getProfile();
+    if (p && p.name && p.color) return { profile: p, created: false };
+    Store.setProfile(DATA.randomNickname(), DATA.randomColor(), DATA.randomLook());
+    return { profile: Store.getProfile(), created: true };
   }
 
   function submitWelcome() {
     const name = $('inName').value.trim().replace(/\s+/g, ' ');
     if (!name) { toast('닉네임을 입력해 주세요 🙂'); $('inName').focus(); return; }
-    const first = !Store.getProfile();
-    Store.setProfile(name.slice(0, 10), profileColor);
-    Campus.setPlayer(name.slice(0, 10), profileColor);
+    const first = welcomeFirst;
+    welcomeFirst = false;
+    Store.setProfile(name.slice(0, 10), profileColor, profileLook);
+    Campus.setPlayer(name.slice(0, 10), profileColor, profileLook);
     refreshHud();
     closeLayers();
     toast(first ? name + '님, 환영해요! 마음에 드는 잔디밭을 찾아가 보세요 🌿' : '프로필을 바꿨어요');
@@ -376,12 +463,53 @@
     });
   }
 
+  /* ---------------- 실시간 함께 보기 · 말풍선 ---------------- */
+  //  3D 화면 + Supabase 연결이 있을 때만 켜져요(2D·오프라인이면 💬 버튼이 안 보여요)
+
+  let liveOn = false;
+
+  function setupLive() {
+    if (!window.Live || !Campus.upsertPeer || !$('btnChat')) return;
+    liveOn = Live.start({
+      getSelf: Campus.getPlayerState,
+      onPeer: Campus.upsertPeer,
+      onLeave: Campus.removePeer,
+      onSay: Campus.showBubble,
+      onCount: function (n) { $('peerCount').textContent = n > 0 ? String(n) : ''; }
+    });
+    $('btnChat').hidden = !liveOn;
+    if (!liveOn) return;
+    $('btnChat').addEventListener('click', function () {
+      if ($('chatBar').hidden) openChat(); else closeChat();
+    });
+    $('chatBar').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const r = Live.say($('inChat').value);
+      if (!r.ok) { toast(r.reason); return; }
+      $('inChat').value = '';
+    });
+    $('inChat').addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { e.stopPropagation(); closeChat(); }
+    });
+  }
+
+  function openChat() {
+    $('chatBar').hidden = false;
+    $('inChat').focus();
+  }
+
+  function closeChat() {
+    $('chatBar').hidden = true;
+    $('inChat').blur();
+  }
+
   /* ---------------- 시작 ---------------- */
 
   function bind() {
     $('btnStart').addEventListener('click', submitWelcome);
     $('inName').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submitWelcome(); } });
     $('profileChip').addEventListener('click', openWelcome);
+    $('btnRandomName').addEventListener('click', rerollProfile);
 
     $('btnBuild').addEventListener('click', onBuild);
     $('btnList').addEventListener('click', function () { renderList(); openLayer('sList'); });
@@ -423,13 +551,24 @@
 
     document.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', closeLayers); });
     $('backdrop').addEventListener('click', closeLayers);
+    window.addEventListener('resize', function () { if ($('mWelcome').classList.contains('open')) renderDeco(); });
     window.addEventListener('keydown', function (e) {
+      // Enter: 말풍선 입력창 열기 (다른 창이 열려 있거나 입력 중이면 무시)
+      const tg = e.target;
+      const typing = tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA' || tg.isContentEditable);
+      if (e.key === 'Enter' && liveOn && !typing && !anyLayerOpen() && !Stack.isActive()) {
+        e.preventDefault();
+        openChat();
+        return;
+      }
       if (e.key === 'Escape' && !Stack.isActive()) closeLayers();
     });
   }
 
   function start() {
     buildSwatches();
+    buildDeco();
+    buildHairColors();
     buildCats();
     buildQuickCheers();
     buildListCats();
@@ -441,13 +580,16 @@
       blockKeys: anyLayerOpen
     });
 
-    const p = Store.getProfile();
-    if (p) Campus.setPlayer(p.name, p.color);
+    const prof = ensureProfile();
+    const p = prof.profile;
+    welcomeFirst = prof.created;
+    Campus.setPlayer(p.name, p.color, p);
     refreshHud();
     refreshNet();
     // 서버에서 다른 사람의 돌탑을 받아 오면 캠퍼스·배지를 다시 그려요
     if (Store.onChange) Store.onChange(function () { refreshHud(); refreshNet(); });
-    if (!p) openWelcome();
+    setupLive();
+    if (prof.created) openWelcome();
   }
 
   window.App = { toast: toast };
