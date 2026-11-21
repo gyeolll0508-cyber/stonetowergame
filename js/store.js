@@ -68,8 +68,10 @@
 
     getProfile: function () { return state.profile; },
 
-    setProfile: function (name, color) {
-      state.profile = { name: name, color: color };
+    // look: { hair, face, hairColor } (캐릭터 꾸미기) — 없으면 지금 꾸민 모습 그대로
+    setProfile: function (name, color, look) {
+      const l = DATA.normLook(look || state.profile || null);
+      state.profile = { name: name, color: color, hair: l.hair, face: l.face, hairColor: l.hairColor };
       const mine = Store.myTower();
       if (mine) { mine.name = name; mine.color = color; }
       save();
@@ -165,7 +167,10 @@
     onlineStatus: function () { return Online.status(); },
 
     // 서버에서 돌탑 목록이 바뀌었거나 연결 상태가 바뀌면 알려 줘요
-    onChange: function (fn) { Online.listen(fn); }
+    onChange: function (fn) { Online.listen(fn); },
+
+    // 실시간 기능(live.js)이 같은 Supabase 연결을 쓰도록 (없으면 null)
+    realtimeClient: function () { return Online.client(); }
   };
 
   /* ---------------- 온라인 공유 (Supabase) ----------------
@@ -354,6 +359,7 @@
 
     return {
       push: push,
+      client: function () { return client; },
       status: function () { return status; },
       listen: function (fn) { listeners.push(fn); }
     };

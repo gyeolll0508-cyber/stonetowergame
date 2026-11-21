@@ -59,15 +59,83 @@
   // 캐릭터 색
   const COLORS = ['#ff8a80', '#ffb74d', '#ffd54f', '#81c784', '#4fc3f7', '#7986cb', '#ba68c8', '#f48fb1'];
 
+  // 캐릭터 꾸미기: 헤어스타일 · 표정 (첫 번째가 기본값)
+  const HAIRS = [
+    { id: 'bowl',  label: '바가지' },
+    { id: 'short', label: '짧은 머리' },
+    { id: 'long',  label: '긴 생머리' },
+    { id: 'twin',  label: '양갈래' },
+    { id: 'bun',   label: '똥머리' }
+  ];
+  const FACES = [
+    { id: 'smile', label: '방긋' },
+    { id: 'dot',   label: '동글눈' },
+    { id: 'wink',  label: '윙크' },
+    { id: 'wow',   label: '깜짝' },
+    { id: 'sleepy', label: '졸려' }
+  ];
+
+  // 머리색 (첫 번째가 기본값)
+  const HAIR_COLORS = [
+    { id: 'black', label: '검정',     hex: '#231d1c' },
+    { id: 'brown', label: '갈색',     hex: '#5e3b2a' },
+    { id: 'tan',   label: '밝은 갈색', hex: '#a8713f' },
+    { id: 'blond', label: '금발',     hex: '#e3bd62' },
+    { id: 'pink',  label: '핑크',     hex: '#ee8fb0' },
+    { id: 'blue',  label: '파랑',     hex: '#5f86d4' },
+    { id: 'mint',  label: '민트',     hex: '#6cc6b0' },
+    { id: 'gray',  label: '회색',     hex: '#a7a3a8' }
+  ];
+
+  function hasId(list, id) { return list.some(function (o) { return o.id === id; }); }
+
+  // 저장된 값이 이상하면 기본값으로
+  function normLook(o) {
+    o = o || {};
+    return {
+      hair: hasId(HAIRS, o.hair) ? o.hair : HAIRS[0].id,
+      face: hasId(FACES, o.face) ? o.face : FACES[0].id,
+      hairColor: hasId(HAIR_COLORS, o.hairColor) ? o.hairColor : HAIR_COLORS[0].id
+    };
+  }
+
+  function hairHex(id) {
+    const c = HAIR_COLORS.find(function (o) { return o.id === id; });
+    return (c || HAIR_COLORS[0]).hex;
+  }
+
+  // 랜덤 닉네임 재료 (형용사 + 캠퍼스 동물/사물, 최대 10자)
+  const NICK_ADJ = ['행복한', '졸린', '용감한', '배고픈', '반짝이는', '느긋한', '씩씩한', '수줍은', '부지런한', '엉뚱한', '다정한', '말랑한'];
+  const NICK_NOUN = ['다람쥐', '오리', '곰돌이', '고양이', '참새', '토끼', '새내기', '돌멩이', '벚꽃', '부엉이', '너구리', '고슴도치'];
+
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  // 처음 입장할 때 쓸 랜덤 닉네임 (예: "졸린 다람쥐")
+  function randomNickname() {
+    return (pick(NICK_ADJ) + ' ' + pick(NICK_NOUN)).slice(0, 10);
+  }
+
+  function randomLook() {
+    // 머리색은 자연스러운 색이 더 자주 나오게
+    const hc = Math.random() < 0.6 ? pick(HAIR_COLORS.slice(0, 4)) : pick(HAIR_COLORS);
+    return { hair: pick(HAIRS).id, face: pick(FACES).id, hairColor: hc.id };
+  }
+
+  // 랜덤 캐릭터 색 (except 색과는 다르게)
+  function randomColor(except) {
+    const pool = COLORS.filter(function (c) { return c !== except; });
+    return pick(pool.length ? pool : COLORS);
+  }
+
   // 빠른 응원 문구
   const QUICK_CHEERS = ['꼭 이뤄질 거예요! ✨', '화이팅! 💪', '저도 응원해요 🙌', '같이 힘내요 🍀', '돌탑 멋져요 🪨'];
 
   // 캠퍼스를 돌아다니는 다른 학생(NPC)
   const NPCS = [
-    { name: '새내기', color: '#4fc3f7' },
-    { name: '과대표', color: '#ffb74d' },
-    { name: '복학생', color: '#81c784' },
-    { name: '교환학생', color: '#ba68c8' }
+    { name: '새내기', color: '#4fc3f7', hair: 'twin', face: 'smile', hairColor: 'brown' },
+    { name: '과대표', color: '#ffb74d', hair: 'short', face: 'dot', hairColor: 'black' },
+    { name: '복학생', color: '#81c784', hair: 'bowl', face: 'sleepy', hairColor: 'gray' },
+    { name: '교환학생', color: '#ba68c8', hair: 'bun', face: 'wink', hairColor: 'blond' }
   ];
 
   // 처음 실행할 때 캠퍼스에 세워 둘 예시 돌탑
@@ -126,6 +194,14 @@
     DEMO_TOWERS: DEMO_TOWERS,
     category: category,
     gauge: gauge,
-    timeAgo: timeAgo
+    timeAgo: timeAgo,
+    randomNickname: randomNickname,
+    randomColor: randomColor,
+    HAIRS: HAIRS,
+    FACES: FACES,
+    normLook: normLook,
+    HAIR_COLORS: HAIR_COLORS,
+    hairHex: hairHex,
+    randomLook: randomLook
   };
 })();
