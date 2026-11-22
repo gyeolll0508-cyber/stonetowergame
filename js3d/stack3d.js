@@ -8,10 +8,10 @@
  *  난이도: 높을수록 빨라지고, 4층부터 바람, 12층부터 손떨림.
  * ========================================================= */
 import * as THREE from 'three';
-import { makeStone, noise } from './actors.js?v=2026112105';
+import { makeStone, noise } from './actors.js?v=2026112206';
 import { TONES, validTone, paintStone } from './tones.js';
 import Bgm from './bgm.js';
-import * as TX from './textures.js?v=2026112105';
+import * as TX from './textures.js?v=2026112206';
 const DATA = window.DATA, STONES = window.STONES, Store = window.Store;
 
 /* ---------------- 규칙 상수 (2D와 동일) ---------------- */

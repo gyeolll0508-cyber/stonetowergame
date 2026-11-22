@@ -12,10 +12,11 @@
  *   - M / 미니맵 누르기: 전체 지도 (mapui.js)
  * ========================================================= */
 import * as THREE from 'three';
-import * as L from './logic.js?v=2026112105';
-import { buildWorld } from './world.js?v=2026112105';
-import { makeTower, makeCharacter } from './actors.js?v=2026112105';
+import * as L from './logic.js?v=2026112206';
+import { buildWorld } from './world.js?v=2026112206';
+import { makeTower, makeCharacter } from './actors.js?v=2026112206';
 import * as MapUI from './mapui.js';
+import * as Admin from './admin.js?v=2026112209';
 const DATA = window.DATA;
 const Store = window.Store;
 
@@ -43,6 +44,11 @@ let towerList = [];
 let highlightId = null;
 let lastLoc = '';
 let buildRing = null, tapMark = null, buildCheckT = 0;
+let admin = null;           // 관리자 모드 (admin.js) — ?admin 으로 열었을 때만 버튼이 보여요
+const ADMIN_DIST_MAX = 220; // 관리자 모드에서는 더 멀리서 내려다볼 수 있어요
+let placeLabels = [];
+
+function adminOn() { return !!(admin && admin.active()); }
 
 const raycaster = new THREE.Raycaster();
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -190,7 +196,15 @@ function update(dt) {
   if (keys.KeyF) pitchIn -= 1;
   if (yawIn) cam.yawT += yawIn * YAW_RATE * dt;
   if (pitchIn) setPitch(cam.pitch + pitchIn * PITCH_RATE * dt);
-  if (f || r) {
+  if (adminOn()) {
+    // 관리자 모드: 캐릭터는 가만히, WASD는 지도(카메라)를 움직여요
+    player.moving = false;
+    if (f || r) {
+      const sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw), sp = cam.dist * 14 * dt;
+      cam.fx = Math.max(0, Math.min(L.W, cam.fx + (-f * sy + r * cy) * sp));
+      cam.fy = Math.max(0, Math.min(L.H, cam.fy + (-f * cy - r * sy) * sp));
+    }
+  } else if (f || r) {
     const sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw);
     let dx = -f * sy + r * cy, dy = -f * cy - r * sy;
     const l = Math.hypot(dx, dy);
@@ -212,7 +226,7 @@ function update(dt) {
   // 카메라
   cam.yaw += (cam.yawT - cam.yaw) * (1 - Math.pow(0.001, dt));
   const target = L.toV3(cam.free ? cam.fx : player.x, cam.free ? cam.fy : player.y);
-  const k = 1 - Math.pow(0.003, dt);
+  const k = adminOn() ? 1 : 1 - Math.pow(0.003, dt);   // 관리자 모드: 끄는 대로 바로 따라와요
   cam.x += (target.x - cam.x) * k;
   cam.z += (target.z - cam.z) * k;
   if (firstFrame) { cam.x = target.x; cam.z = target.z; cam.yaw = cam.yawT; }
@@ -230,7 +244,7 @@ function update(dt) {
   buildCheckT -= dt;
   if (buildCheckT <= 0) {
     buildCheckT = 0.2;
-    const show = !!Store.getProfile() && !Store.myTower();
+    const show = !!Store.getProfile() && !Store.myTower() && !adminOn();
     buildRing.visible = show;
     if (show) {
       const ok = Campus.canBuildHere().ok;
@@ -366,7 +380,10 @@ function onDown(e) {
   if (pointers.size === 1) {
     const rotate = e.button === 2 || e.button === 1 || e.shiftKey;
     gesture = { type: rotate ? 'rotate' : 'tap', id: e.pointerId, sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY };
+    // 관리자 모드: 왼쪽 버튼(한 손가락)은 건물 옮기기 / 지도 끌기
+    if (!rotate && adminOn()) { gesture.type = 'admin'; admin.down(e); }
   } else if (pointers.size === 2) {
+    if (gesture && gesture.type === 'admin') admin.up(e, true);
     player.tx = player.ty = null;
     const pi = pinchInfo();
     gesture = { type: 'pinch', d: pi.d, mx: pi.mx, my: pi.my };
@@ -377,6 +394,7 @@ function onMove(e) {
   const p = pointers.get(e.pointerId);
   if (!p || !gesture) return;
   p.x = e.clientX; p.y = e.clientY;
+  if (gesture.type === 'admin') { if (e.pointerId === gesture.id) admin.move(e); return; }
   if (gesture.type === 'tap' && Math.hypot(e.clientX - gesture.sx, e.clientY - gesture.sy) > 10) gesture.type = 'drag';
   if (gesture.type === 'drag' && e.pointerId === gesture.id) {
     const g = groundAt(e.clientX, e.clientY);
@@ -400,7 +418,9 @@ function onUp(e) {
   if (!pointers.has(e.pointerId)) return;
   pointers.delete(e.pointerId);
   if (!gesture) return;
-  if (gesture.type === 'tap' && e.pointerId === gesture.id) {
+  if (gesture.type === 'admin' && e.pointerId === gesture.id) {
+    admin.up(e, false);
+  } else if (gesture.type === 'tap' && e.pointerId === gesture.id) {
     const id = towerAtScreen(e.clientX, e.clientY);
     if (id) {
       if (opts.onTowerTap) opts.onTowerTap(id);
@@ -443,6 +463,15 @@ function resize() {
   camera.aspect = w / h;
   camera.fov = w < h ? 58 : 45;   // 세로 화면은 시야를 넓게
   camera.updateProjectionMatrix();
+}
+
+/* ---------------- 건물 이름표 (관리자 모드에서 바뀌면 다시 만들어요) ---------------- */
+
+function syncPlaceLabels() {
+  placeLabels.forEach(removeLabel);
+  placeLabels = world.buildings.map(function (b) {
+    return addLabel('place', (b.place.icon || '🏫') + ' ' + b.place.name, function (v) { v.set(b.center.x, b.height + 5, b.center.z); });
+  });
 }
 
 /* ---------------- 돌탑 동기화 ---------------- */
@@ -510,9 +539,7 @@ const Campus = {
     world = buildWorld(scene, { trees: trees, mobile: mobile });
 
     // 건물 이름표
-    world.buildings.forEach(function (b) {
-      addLabel('place', b.place.icon + ' ' + b.place.name, function (v) { v.set(b.center.x, b.height + 5, b.center.z); });
-    });
+    syncPlaceLabels();
     const plazaC = L.toV3(L.PLAZA.x, L.PLAZA.y);
     addLabel('place plaza', '🪨 ' + L.PLAZA.name, function (v) { v.set(plazaC.x, 4, plazaC.z); });
 
@@ -572,7 +599,38 @@ const Campus = {
           towers: towerList.length ? towerList : Store.towers()
         };
       },
-      canOpen: function () { return running && !(opts.blockKeys && opts.blockKeys()); }
+      canOpen: function () { return running && !adminOn() && !(opts.blockKeys && opts.blockKeys()); }
+    });
+
+    // 관리자 모드 (건물 배치 바꾸기·추가)
+    admin = Admin.init({
+      scene: scene, world: world, trees: trees, cam: cam, raycaster: raycaster,
+      camera: function () { return camera; },
+      setRay: setRay, groundAt: groundAt,
+      towers: function () { return towerList.length ? towerList : Store.towers(); },
+      syncLabels: syncPlaceLabels,
+      towerAt: towerAtScreen,
+      highlight: function (id) { highlightId = id; },
+      enter: function () {
+        // 위에서 내려다보는 시점으로
+        cam.saved = { pitch: cam.pitch, dist: cam.dist };
+        cam.free = true; cam.fx = player.x; cam.fy = player.y;
+        setPitch(1.25);
+        cam.dist = Math.max(cam.dist, 90);
+        player.tx = player.ty = null;
+        MapUI.closeFull();
+      },
+      exit: function () {
+        if (cam.saved) { setPitch(cam.saved.pitch); cam.dist = cam.saved.dist; cam.saved = null; }
+        cam.dist = Math.min(cam.dist, DIST_MAX);
+        cam.free = false;
+        // 새 건물 안에 갇혔으면 밖으로 꺼내요
+        if (L.blocked(player.x, player.y)) Campus.teleport(player.x, player.y);
+        npcs.forEach(function (n) {
+          if (L.blocked(n.x, n.y)) { const q = L.randomWalkable(npcRand); n.x = q.x; n.y = q.y; n.tx = n.ty = null; }
+        });
+        lastLoc = '';
+      }
     });
 
     syncTowers(Store.towers());
@@ -631,7 +689,7 @@ const Campus = {
   },
 
   zoomBy: function (f) {
-    cam.dist = Math.max(DIST_MIN, Math.min(DIST_MAX, cam.dist / f));
+    cam.dist = Math.max(DIST_MIN, Math.min(adminOn() ? ADMIN_DIST_MAX : DIST_MAX, cam.dist / f));
   },
 
   focus: function (x, y) {
@@ -678,7 +736,7 @@ const Campus = {
 
   canBuildHere: function (ignoreId) {
     const list = towerList.length ? towerList : Store.towers();
-    return L.canBuild(player.x, player.y, list, trees, ignoreId);
+    return L.canBuild(player.x, player.y, list, trees.filter(function (t) { return !t.hidden; }), ignoreId);
   },
 
   pause: function () {

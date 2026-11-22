@@ -6,7 +6,7 @@
  *            (지도를 눌러도 아무 일도 없어요. 세로 화면에선 옆으로 끌어서 봐요)
  *  - 경계 안내: 캠퍼스 끝(생울타리)에 막히면 빨간 글씨로 알려 줘요.
  *
- *  좌표는 게임 좌표(px)를 그대로 써요. 캠퍼스 2400 × 1700px = 240m × 170m
+ *  좌표는 게임 좌표(px)를 그대로 써요. 캠퍼스 3000 × 2100px = 300m × 210m
  *  campus3d.js가 init(hooks)로 필요한 함수들을 넘겨주고, 매 프레임 frame()을 불러요.
  * ========================================================= */
 import * as L from './logic.js';
@@ -238,7 +238,7 @@ function setFolded(v) {
 let fullPan = null;   // 세로 화면에서 지도를 옆으로 끌어 볼 때, 지도 왼쪽 끝의 화면 x
 let drag = null;      // 손가락(마우스)으로 끄는 중인 정보
 
-// 지도 모달에 캠퍼스 바깥을 이만큼(게임 px)만 남겨요 → 모달 비율 = (2400+60) : (1700+60)
+// 지도 모달에 캠퍼스 바깥을 이만큼(게임 px)만 남겨요 → 모달 비율 = (3000+60) : (2100+60)
 //  (CSS .fm-card의 aspect-ratio와 같은 숫자여야 지도에 딱 맞아요)
 const FULL_MARGIN = 30;
 
@@ -332,6 +332,8 @@ function isTyping(e) {
  * }
  */
 export function init(h) {
+  // 전체 지도 모달 비율을 맵 크기에 맞춰요 (css .fm-card)
+  document.documentElement.style.setProperty('--map-ar', ((L.W + FULL_MARGIN * 2) / (L.H + FULL_MARGIN * 2)).toFixed(4));
   hooks = h;
 
   // 미니맵

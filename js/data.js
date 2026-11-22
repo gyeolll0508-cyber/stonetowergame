@@ -9,41 +9,45 @@
   'use strict';
 
   // 캠퍼스 월드 크기(픽셀 단위)
-  const WORLD = { w: 2400, h: 1700 };
+  const WORLD = { w: 3000, h: 2100 };
 
   // 플레이어 시작 위치(정문 바로 안쪽)
-  const START = { x: 1200, y: 1470 };
+  const START = { x: 1200, y: 1870 };
 
   // 소원 기원 게이지가 100%가 되는 층수
   const GAUGE_MAX = 15;
 
   // 건물·연못·운동장·정문
   //  type: building(통과 불가) / pond(통과 불가) / field(통과 가능, 돌탑 불가) / gate(장식)
+  //  building의 floors(층수)·glass(유리 외벽)는 3D에서 써요. 관리자 모드(?admin)에서 바꿀 수 있어요.
+  //  ※ 관리자 모드로 저장한 배치가 있으면 js/layout.js가 이 목록을 그 배치로 바꿔요.
   const PLACES = [
-    { id: 'gate',    name: '충북대학교 정문', type: 'gate',     x: 1110, y: 1600, w: 180, h: 60 },
-    { id: 'hq',      name: '대학본부',        type: 'building', x: 860,  y: 1160, w: 230, h: 130, wall: '#f4e3c3', roof: '#c76b4f', icon: '🏛️' },
-    { id: 'library', name: '중앙도서관',      type: 'building', x: 1320, y: 1080, w: 270, h: 160, wall: '#e9eef5', roof: '#5b7fb5', icon: '📚' },
-    { id: 'union',   name: '학생회관',        type: 'building', x: 860,  y: 700,  w: 230, h: 130, wall: '#fbe7d6', roof: '#e0884f', icon: '🍙' },
-    { id: 'culture', name: '개신문화관',      type: 'building', x: 1320, y: 660,  w: 250, h: 140, wall: '#efe4f6', roof: '#8e6bb8', icon: '🎭' },
-    { id: 'eng',     name: '공과대학',        type: 'building', x: 1720, y: 1000, w: 300, h: 150, wall: '#e3ecef', roof: '#4f8f97', icon: '⚙️' },
-    { id: 'it',      name: '전자정보대학',    type: 'building', x: 1760, y: 590,  w: 270, h: 140, wall: '#e6eff7', roof: '#3f7cc0', icon: '💻' },
-    { id: 'science', name: '자연과학대학',    type: 'building', x: 420,  y: 1000, w: 270, h: 150, wall: '#e8f3e2', roof: '#5f9e57', icon: '🔬' },
-    { id: 'human',   name: '인문대학',        type: 'building', x: 420,  y: 590,  w: 250, h: 140, wall: '#f6ecd9', roof: '#b9874d', icon: '📖' },
-    { id: 'social',  name: '사회과학대학',    type: 'building', x: 700,  y: 210,  w: 250, h: 130, wall: '#f3e6e6', roof: '#b4645f', icon: '🗳️' },
-    { id: 'biz',     name: '경영대학',        type: 'building', x: 1330, y: 210,  w: 250, h: 130, wall: '#eef0e2', roof: '#7d8f3f', icon: '📈' },
-    { id: 'dorm',    name: '기숙사',          type: 'building', x: 1930, y: 170,  w: 270, h: 170, wall: '#fdf0e3', roof: '#d0745c', icon: '🛏️' },
+    { id: 'gate',    name: '충북대학교 정문', type: 'gate',     x: 1110, y: 2000, w: 180, h: 60 },
+    { id: 'hq',      name: '대학본부',        type: 'building', x: 860,  y: 1160, w: 230, h: 130, wall: '#f4e3c3', roof: '#c76b4f', icon: '🏛️', floors: 5 },
+    { id: 'library', name: '중앙도서관',      type: 'building', x: 1320, y: 1080, w: 270, h: 160, wall: '#e9eef5', roof: '#5b7fb5', icon: '📚', floors: 5, glass: true },
+    { id: 'union',   name: '학생회관',        type: 'building', x: 860,  y: 700,  w: 230, h: 130, wall: '#fbe7d6', roof: '#e0884f', icon: '🍙', floors: 4 },
+    { id: 'culture', name: '개신문화관',      type: 'building', x: 1320, y: 660,  w: 250, h: 140, wall: '#efe4f6', roof: '#8e6bb8', icon: '🎭', floors: 3 },
+    { id: 'eng',     name: '공과대학',        type: 'building', x: 1720, y: 1000, w: 300, h: 150, wall: '#e3ecef', roof: '#4f8f97', icon: '⚙️', floors: 6, glass: true },
+    { id: 'it',      name: '전자정보대학',    type: 'building', x: 1760, y: 590,  w: 270, h: 140, wall: '#e6eff7', roof: '#3f7cc0', icon: '💻', floors: 6, glass: true },
+    { id: 'science', name: '자연과학대학',    type: 'building', x: 420,  y: 1000, w: 270, h: 150, wall: '#e8f3e2', roof: '#5f9e57', icon: '🔬', floors: 5 },
+    { id: 'human',   name: '인문대학',        type: 'building', x: 420,  y: 590,  w: 250, h: 140, wall: '#f6ecd9', roof: '#b9874d', icon: '📖', floors: 4 },
+    { id: 'social',  name: '사회과학대학',    type: 'building', x: 700,  y: 210,  w: 250, h: 130, wall: '#f3e6e6', roof: '#b4645f', icon: '🗳️', floors: 5 },
+    { id: 'biz',     name: '경영대학',        type: 'building', x: 1330, y: 210,  w: 250, h: 130, wall: '#eef0e2', roof: '#7d8f3f', icon: '📈', floors: 5 },
+    { id: 'dorm',    name: '기숙사',          type: 'building', x: 1930, y: 170,  w: 270, h: 170, wall: '#fdf0e3', roof: '#d0745c', icon: '🛏️', floors: 8 },
     { id: 'pond',    name: '솔못 연못',       type: 'pond',     x: 470,  y: 1260, w: 340, h: 200 },
     { id: 'field',   name: '대운동장',        type: 'field',    x: 1680, y: 1270, w: 440, h: 270 }
   ];
 
   // 길(선분 + 폭)
   const ROADS = [
-    { x1: 1200, y1: 1700, x2: 1200, y2: 150, w: 76 },  // 정문에서 북쪽으로 가는 큰길
-    { x1: 180,  y1: 920,  x2: 2240, y2: 920, w: 60 },  // 동서 중앙로
-    { x1: 420,  y1: 470,  x2: 2120, y2: 470, w: 50 },  // 북쪽 길
+    { x1: 1200, y1: 2100, x2: 1200, y2: 150, w: 76 },  // 정문에서 북쪽으로 가는 큰길
+    { x1: 180,  y1: 920,  x2: 2840, y2: 920, w: 60 },  // 동서 중앙로
+    { x1: 420,  y1: 470,  x2: 2720, y2: 470, w: 50 },  // 북쪽 길
     { x1: 300,  y1: 1520, x2: 1200, y2: 1520, w: 44 }, // 연못 산책로
     { x1: 765,  y1: 470,  x2: 765,  y2: 920, w: 40 },  // 서쪽 샛길(인문대·학생회관 사이)
-    { x1: 2120, y1: 470,  x2: 2120, y2: 920, w: 40 }   // 동쪽 샛길
+    { x1: 2120, y1: 470,  x2: 2120, y2: 920, w: 40 },  // 동쪽 샛길
+    { x1: 2720, y1: 470,  x2: 2720, y2: 1800, w: 44 }, // 동쪽 끝 길 (넓어진 곳)
+    { x1: 300,  y1: 1800, x2: 2720, y2: 1800, w: 50 }  // 남쪽 길 (넓어진 곳)
   ];
 
   // 소원 카테고리

@@ -16,7 +16,7 @@
 
   function seed() {
     const now = Date.now();
-    const s = { version: 1, profile: null, myId: null, towers: {}, liked: {} };
+    const s = { version: 1, profile: null, myId: null, towers: {}, liked: {}, ox: 0, oy: 0 };
     DATA.DEMO_TOWERS.forEach(function (d, i) {
       s.towers[d.id] = {
         id: d.id, name: d.name, color: d.color, x: d.x, y: d.y,
@@ -161,6 +161,7 @@
     // 개발·테스트용: 모든 기록 초기화
     reset: function () {
       state = seed();
+      Store.setFrame(DATA.WORLD.ox || 0, DATA.WORLD.oy || 0);
       save();
     },
 
@@ -175,6 +176,39 @@
       save();
       if (id === state.myId) Online.push(t);
       return t;
+    },
+
+    // 맵 기준점 맞추기 (layout.js가 불러요)
+    //  관리자 모드에서 맵을 위쪽·왼쪽으로 넓히면 건물·길이 아래·오른쪽으로 밀려요.
+    //  서버(stone_towers)의 돌탑 좌표는 그대로 두고, 게임 좌표 = 서버 좌표 + (ox, oy)로 바꿔서 보여 줘요.
+    //  이 브라우저에 보관한 돌탑도 지금 기준점에 맞춰 함께 옮겨요.
+    setFrame: function (ox, oy) {
+      ox = ox | 0; oy = oy | 0;
+      const dx = ox - (state.ox || 0), dy = oy - (state.oy || 0);
+      if (!dx && !dy) return;
+      Object.keys(state.towers).forEach(function (k) {
+        state.towers[k].x += dx;
+        state.towers[k].y += dy;
+      });
+      state.ox = ox; state.oy = oy;
+      save();
+    },
+
+    // 관리자 모드: 돌탑 지우기 → Promise<{ ok, error }>
+    //  서버에 올라간 돌탑은 서버에서 지워서 모두에게서 사라져요.
+    //  예시 돌탑·이 브라우저에만 있는 돌탑은 이 브라우저에서만 지워져요.
+    adminRemoveTower: function (id) {
+      const t = state.towers[id];
+      if (!t) return Promise.resolve({ ok: true });
+      const job = t.rid ? Online.adminDelete(t.rid) : Promise.resolve({ ok: true, local: true });
+      return job.then(function (r) {
+        if (!r.ok) return r;
+        delete state.towers[id];
+        if (state.myId === id) state.myId = null;
+        save();
+        Online.emit();
+        return r;
+      });
     },
 
     // 온라인 공유 상태: 'off'(설정 없음) | 'connecting' | 'online' | 'readonly'(구경만) | 'offline'
@@ -255,8 +289,8 @@
       t.rid = row.id;
       t.name = row.nickname;
       t.color = row.color;
-      t.x = row.x;
-      t.y = row.y;
+      t.x = row.x + (state.ox || 0);   // 서버 좌표 → 게임 좌표 (Store.setFrame 참고)
+      t.y = row.y + (state.oy || 0);
       t.cat = row.cat;
       t.wish = row.wish;
       t.best = row.height;
@@ -293,10 +327,14 @@
         state.towers[t.id] = apply(row, t);
         if (mine) state.myId = t.id;
       });
-      // 서버에서 사라진 다른 사람 돌탑은 정리
+      // 서버에서 사라진 돌탑은 정리
+      //  내 돌탑도 서버에 올라간 적이 있는데(rid) 사라졌으면 관리자가 지운 거예요 → 새로 세울 수 있게
+      //  (아직 올리는 중(dirty)인 건 빼고)
       Object.keys(state.towers).forEach(function (k) {
         const t = state.towers[k];
-        if (t.rid && !seen[t.rid] && k !== state.myId) delete state.towers[k];
+        if (!t.rid || seen[t.rid]) return;
+        if (k !== state.myId) delete state.towers[k];
+        else if (!t.dirty) { delete state.towers[k]; state.myId = null; }
       });
       save();
     }
@@ -304,7 +342,7 @@
     function insert(t) {
       return client.from(TABLE).insert({
         nickname: clip(t.name, 10) || '익명', wish: clip(t.wish, 60), color: t.color,
-        cat: t.cat, x: Math.round(t.x), y: Math.round(t.y)
+        cat: t.cat, x: Math.round(t.x - (state.ox || 0)), y: Math.round(t.y - (state.oy || 0))
       }).select('id, created_at').single().then(function (r) {
         if (r.error && r.error.code === '23505') {
           // 이미 서버에 내 돌탑이 있음(1인 1탑) → 그 돌탑과 연결
@@ -394,8 +432,21 @@
       document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
     }
 
+    // 관리자: 서버의 돌탑 지우기 (서버 함수 admin_delete_tower)
+    function adminDelete(rid) {
+      if (!enabled) return Promise.resolve({ ok: true });
+      return client.rpc('admin_delete_tower', { p_id: String(rid) }).then(function (r) {
+        if (!r.error) return { ok: true, count: r.data };
+        const m = r.error.message || '';
+        if (r.error.code === 'PGRST202' || /function/i.test(m)) return { ok: false, error: 'Supabase에 supabase/campus_layout.sql을 다시 실행해 주세요' };
+        return { ok: false, error: '서버 오류: ' + m };
+      }, function () { return { ok: false, error: '서버에 연결하지 못했어요' }; });
+    }
+
     return {
       push: push,
+      adminDelete: adminDelete,
+      emit: emit,
       client: function () { return client; },
       status: function () { return status; },
       listen: function (fn) { listeners.push(fn); }
