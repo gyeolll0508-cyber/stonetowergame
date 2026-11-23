@@ -68,23 +68,47 @@ body.stacking #labels3d { display: none; }
 }
 @keyframes bubbleIn { from { opacity: 0; margin-top: -22px; } }
 
-/* 말풍선 입력창 (아래 버튼 줄 바로 위) */
-.chatbar {
+/* 말풍선 창: 설명 + 기록 + 입력 (아래 버튼 줄 바로 위) */
+.chatbox {
   position: fixed;
   left: 50%;
   bottom: calc(80px + var(--safe-bottom));
   z-index: 11;
   display: flex;
+  flex-direction: column;
   gap: 6px;
   width: min(440px, calc(100vw - 24px));
-  padding: 6px;
+  padding: 8px;
   border: 2px solid var(--line);
   border-radius: 16px;
   background: var(--paper);
   box-shadow: 0 3px 0 var(--line);
   transform: translateX(-50%);
 }
-.chatbar[hidden] { display: none; }
+.chatbox[hidden] { display: none; }
+.chat-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; }
+.chat-head b { font-family: 'Jua', sans-serif; font-weight: 400; font-size: 16px; }
+.chat-x { border: 0; background: none; font-size: 16px; cursor: pointer; padding: 2px 6px; }
+.chat-help { margin: 0; padding: 0 4px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.chat-log {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: min(180px, 26vh);
+  overflow-y: auto;
+  border-radius: 12px;
+  background: var(--paper-2);
+  font-size: 14px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.chat-log li { display: flex; align-items: baseline; gap: 6px; padding: 3px 4px; line-height: 1.4; }
+.chat-log li b { flex: none; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.chat-log li.me b { color: #c0701f; }
+.chat-log li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.chat-log li time { flex: none; color: var(--muted); font-size: 11px; }
+.chat-log li.empty { color: var(--muted); font-size: 13px; justify-content: center; }
+.chatbar { display: flex; gap: 6px; }
 .chatbar input {
   flex: 1;
   min-width: 0;
@@ -112,7 +136,33 @@ body.stacking #labels3d { display: none; }
   line-height: 14px;
 }
 #btnChat small:empty { display: none; }
-body.stacking .chatbar, body.stacking #btnChat { display: none; }
+#btnChat small { background: var(--like); color: #fff; }
+body.stacking .chatbox, body.stacking #btnChat { display: none; }
+
+/* 👥 접속자 수 */
+.live-count { background: #e3f5e2; font-weight: 700; }
+
+/* UI 접기·펼치기 버튼 (왼쪽 가운데) */
+.ui-fold {
+  position: fixed;
+  left: 12px;
+  top: 50%;
+  z-index: 12;
+  padding: 6px 11px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--line);
+  font-family: 'Jua', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+.ui-fold:active { transform: translateY(calc(-50% + 2px)); box-shadow: 0 1px 0 var(--line); }
+body.stacking .ui-fold, body.admin-on .ui-fold { display: none; }
+body.ui-folded .ui-fold { background: var(--primary-2); }
+body.ui-folded:not(.stacking):not(.admin-on) :is(.hud, .zoom, .actionbar, .mode-link, .my-arrow, .chatbox,
+  .minimap, .minimap-show, .edge-notice) { display: none !important; }
 
 /* 시점 회전 버튼 (확대·축소 버튼과 같은 모양) */
 .zoom .rot { font-size: 20px; }
@@ -441,7 +491,7 @@ body.stacking .minimap, body.stacking .minimap-show, body.stacking .edge-notice 
 }
 body.stacking .admin-fab, body.stacking .admin-panel { display: none; }
 body.admin-on .actionbar, body.admin-on .my-arrow, body.admin-on .mode-link,
-body.admin-on .loc, body.admin-on #myCard, body.admin-on .chatbar { display: none !important; }
+body.admin-on .loc, body.admin-on #myCard, body.admin-on .chatbox { display: none !important; }
 
 .admin-panel {
   position: fixed;

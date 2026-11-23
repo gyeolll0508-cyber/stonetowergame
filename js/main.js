@@ -652,7 +652,53 @@
   /* ---------------- 실시간 함께 보기 · 말풍선 ---------------- */
   //  3D 화면 + Supabase 연결이 있을 때만 켜져요(2D·오프라인이면 💬 버튼이 안 보여요)
 
-  let liveOn = false;
+  let liveOn = false, unread = 0;
+
+  // 👥 접속자 수 (나 포함) — 연결되기 전에는 숨겨요
+  function updateLiveCount() {
+    const el = $('liveCount');
+    if (!el) return;
+    const on = liveOn && Live.isOnline();
+    el.hidden = !on;
+    if (on) el.textContent = '👥 ' + (Live.count() + 1) + '명 접속 중';
+  }
+
+  function chatTime(at) {
+    const d = new Date(at);
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+
+  function chatItem(e) {
+    const li = document.createElement('li');
+    if (e.me) li.className = 'me';
+    const who = document.createElement('b');
+    who.textContent = e.me ? '나' : e.name;
+    const txt = document.createElement('span');
+    txt.textContent = e.text;
+    const tm = document.createElement('time');
+    tm.textContent = chatTime(e.at);
+    li.appendChild(who); li.appendChild(txt); li.appendChild(tm);
+    return li;
+  }
+
+  function renderChatLog() {
+    const ol = $('chatLog');
+    ol.innerHTML = '';
+    const list = Live.log();
+    if (!list.length) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = '아직 주고받은 말이 없어요. 첫 인사를 건네 보세요 👋';
+      ol.appendChild(li);
+    }
+    list.forEach(function (e) { ol.appendChild(chatItem(e)); });
+    ol.scrollTop = ol.scrollHeight;
+  }
+
+  function setUnread(n) {
+    unread = n;
+    $('chatUnread').textContent = n > 0 ? (n > 9 ? '9+' : String(n)) : '';
+  }
 
   function setupLive() {
     if (!window.Live || !Campus.upsertPeer || !$('btnChat')) return;
@@ -661,13 +707,28 @@
       onPeer: Campus.upsertPeer,
       onLeave: Campus.removePeer,
       onSay: Campus.showBubble,
-      onCount: function (n) { $('peerCount').textContent = n > 0 ? String(n) : ''; }
+      onCount: updateLiveCount,
+      onStatus: updateLiveCount,
+      onLog: function (e) {
+        if (!$('chatBox').hidden) {
+          const ol = $('chatLog');
+          const empty = ol.querySelector('.empty');
+          if (empty) empty.remove();
+          ol.appendChild(chatItem(e));
+          while (ol.children.length > 50) ol.removeChild(ol.firstChild);
+          ol.scrollTop = ol.scrollHeight;
+        } else if (!e.me) {
+          setUnread(unread + 1);
+        }
+      }
     });
     $('btnChat').hidden = !liveOn;
+    updateLiveCount();
     if (!liveOn) return;
     $('btnChat').addEventListener('click', function () {
-      if ($('chatBar').hidden) openChat(); else closeChat();
+      if ($('chatBox').hidden) openChat(); else closeChat();
     });
+    $('chatClose').addEventListener('click', closeChat);
     $('chatBar').addEventListener('submit', function (e) {
       e.preventDefault();
       const r = Live.say($('inChat').value);
@@ -680,13 +741,40 @@
   }
 
   function openChat() {
-    $('chatBar').hidden = false;
+    setUIFolded(false);
+    $('chatBox').hidden = false;
+    setUnread(0);
+    renderChatLog();
     $('inChat').focus();
   }
 
   function closeChat() {
-    $('chatBar').hidden = true;
+    $('chatBox').hidden = true;
     $('inChat').blur();
+  }
+
+  /* ---------------- UI 접기·펼치기 (3D 화면) ---------------- */
+
+  const UI_FOLD_KEY = 'cbnu-ui-folded';
+
+  function setUIFolded(v) {
+    const btn = $('uiFold');
+    if (!btn) return;
+    document.body.classList.toggle('ui-folded', v);
+    btn.setAttribute('aria-pressed', v ? 'true' : 'false');
+    btn.title = v ? '버튼·정보 펼치기 (H)' : '버튼·정보 접기 (H)';
+    btn.innerHTML = v ? '👀 <span class="lbl">UI 펼치기</span>' : '🙈 <span class="lbl">UI 접기</span>';
+    if (v && $('chatBox') && !$('chatBox').hidden) closeChat();
+    try { window.localStorage.setItem(UI_FOLD_KEY, v ? '1' : '0'); } catch (e) { /* 저장 못 해도 괜찮아요 */ }
+  }
+
+  function setupUIFold() {
+    const btn = $('uiFold');
+    if (!btn) return;
+    btn.addEventListener('click', function () { setUIFolded(!document.body.classList.contains('ui-folded')); });
+    let saved = false;
+    try { saved = window.localStorage.getItem(UI_FOLD_KEY) === '1'; } catch (e) { /* 무시 */ }
+    setUIFolded(saved);
   }
 
   /* ---------------- 시작 ---------------- */
@@ -761,6 +849,10 @@
       if (e.key === 'Escape' && !Stack.isActive()) closeLayers();
  
       if (e.code === 'KeyM' && !typing && !anyLayerOpen() && !Stack.isActive() && Store.myTower()) goToMine();
+      if (e.code === 'KeyH' && !typing && !anyLayerOpen() && !Stack.isActive() && $('uiFold') &&
+        !document.body.classList.contains('admin-on')) {
+        setUIFolded(!document.body.classList.contains('ui-folded'));
+      }
     });
   }
 
@@ -795,6 +887,7 @@
     if (Store.onNotice) Store.onNotice(toast);
     renderAccountChip();
 setupLive();
+setupUIFold();
 if (prof.created) openWelcome();
 requestAnimationFrame(updateMyArrow);
   }
