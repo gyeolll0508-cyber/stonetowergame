@@ -167,9 +167,17 @@ function moverMesh() {
   return m;
 }
 
+// 돌 종류는 매번 무작위로 바뀌어요 (고를 수 없음)
+function randomType() {
+  const list = STONES.TYPES;
+  return list[Math.floor(Math.random() * list.length)].id;
+}
+
 function newMover() {
+  selected = randomType();
   mover = { type: typeOf(selected), x: 0, yb: topY() - HOVER_GAP, vy: 0, seed: seedNo++ };
   mover.mesh = moverMesh();
+  markTray(selected);
 }
 
 function rollWind() {
@@ -706,28 +714,21 @@ function buildTray() {
     b.className = 'tray-btn';
     b.dataset.id = t.id;
     b.title = t.name + ' — ' + t.tip;
-    b.setAttribute('aria-label', t.name + ' (' + (i + 1) + '번): ' + t.tip);
+    b.setAttribute('aria-label', t.name + ': ' + t.tip);
     b.appendChild(STONES.icon(t, 54));
     const name = document.createElement('span');
     name.className = 'tray-name';
     name.textContent = t.name;
-    const key = document.createElement('kbd');
-    key.textContent = i + 1;
     b.appendChild(name);
-    b.appendChild(key);
-    b.addEventListener('click', function () { select(t.id); });
+    b.tabIndex = -1;
+    b.setAttribute('aria-disabled', 'true');
     el.tray.appendChild(b);
   });
 }
 
-function select(id) {
-  selected = id;
-  if (state === 'hover' && mover) {
-    // 고른 돌로 바로 바꿔 줘요
-    disposeMesh(mover.mesh);
-    mover.type = typeOf(id);
-    mover.mesh = moverMesh();
-  }
+// 지금 떨어뜨릴 돌을 트레이에 표시만 해요
+function markTray(id) {
+  if (!el || !el.tray) return;
   Array.prototype.forEach.call(el.tray.children, function (b) {
     b.classList.toggle('on', b.dataset.id === id);
   });
@@ -827,10 +828,7 @@ function onKey(e) {
     return;
   }
   if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); if (!e.repeat) drop(); }
-  else if (/^Digit[1-7]$/.test(e.code) || /^Numpad[1-7]$/.test(e.code)) {
-    const n = parseInt(e.code.slice(-1), 10) - 1;
-    select(STONES.TYPES[n].id);
-  } else if (e.code === 'Escape') close();
+  else if (e.code === 'Escape') close();
 }
 
 function init() {
@@ -862,7 +860,7 @@ function init() {
   popLayer.appendChild(starTag);
 
   buildTray();
-  select(selected);
+  markTray(selected);
 
   el.canvas.addEventListener('pointerdown', function (e) { e.preventDefault(); drop(); });
   $('skFinish').addEventListener('click', finish);

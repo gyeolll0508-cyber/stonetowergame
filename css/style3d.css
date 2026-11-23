@@ -532,3 +532,76 @@ body.admin-on .loc, body.admin-on #myCard, body.admin-on .chatbar { display: non
 .admin-panel .ad-now { margin: 0; line-height: 1.5; }
 .admin-panel .ad-check { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; line-height: 1.4; cursor: pointer; }
 .admin-panel .ad-check input { margin-top: 2px; }
+
+/* 돌 종류는 무작위 — 트레이는 지금 돌을 보여주기만 해요 */
+#skTray .tray-btn { pointer-events: none; cursor: default; opacity: .45; }
+#skTray .tray-btn.on { opacity: 1; }
+
+/* ---------------- 돌탑 인증샷 (폴라로이드) ---------------- */
+.photo-btn {
+  position: fixed;
+  left: 12px;
+  bottom: calc(86px + var(--safe-bottom));
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 62px; height: 62px;
+  border: 2.5px solid var(--line);
+  border-radius: 16px;
+  background: #fffdf7;
+  box-shadow: 0 3px 0 var(--line);
+  color: var(--ink);
+  font-family: 'Jua', sans-serif;
+  cursor: pointer;
+  transform: rotate(-4deg);
+}
+.photo-btn .ico { font-size: 26px; line-height: 1; }
+.photo-btn .txt { font-size: 11.5px; }
+.photo-btn:hover { background: #fff3d6; }
+.photo-btn:active { transform: rotate(-4deg) translateY(2px); box-shadow: 0 1px 0 var(--line); }
+body.stacking .photo-btn, body.photo-open .photo-btn { display: none; }
+
+.photo-flash {
+  position: fixed; inset: 0; z-index: 70;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+}
+.photo-flash.go { animation: photoFlash .45s ease-out; }
+@keyframes photoFlash { 0% { opacity: .95; } 100% { opacity: 0; } }
+
+.photo-overlay {
+  position: fixed; inset: 0; z-index: 65;
+  display: grid;
+  place-items: center;
+  padding: calc(16px + var(--safe-top)) 16px calc(16px + var(--safe-bottom));
+  background: rgba(50, 40, 30, .55);
+}
+.photo-overlay[hidden] { display: none; }
+.photo-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 100%;
+}
+.photo-img {
+  display: block;
+  width: min(84vw, 420px, calc((100vh - 140px) * 1080 / 1312));
+  height: auto;
+  border-radius: 4px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .35);
+  transform: translateY(-40px) rotate(-6deg) scale(.9);
+  opacity: 0;
+  transition: transform .5s cubic-bezier(.2, 1.3, .4, 1), opacity .3s;
+}
+.photo-overlay.show .photo-img { transform: rotate(-2deg); opacity: 1; }
+.photo-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.photo-actions [hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .photo-img { transition: none; }
+  .photo-flash.go { animation: none; }
+}

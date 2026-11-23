@@ -4,10 +4,10 @@
  *  그래서 main.js·store.js·stack.js(돌 쌓기)는 고치지 않고 그대로 동작해요.
  *
  *  조작
- *   - 탭/클릭: 그곳으로 걷기 · 꾹 눌러 끌기: 손가락 따라가기
+ *   - 탭/클릭: 그곳으로 걷기 · 끌기(마우스·한 손가락): 시점 회전
  *   - WASD/방향키: 이동(카메라 기준) · Q/E: 좌우 360° 회전 · R/F: 위아래 기울이기
  *   - ⟲⟳▲▼ 버튼: 한 번 누르면 조금, 꾹 누르면 계속 돌아가요
- *   - 오른쪽 버튼 드래그 / 두 손가락: 시점 회전·확대
+ *   - 두 손가락: 시점 회전·확대
  *   - 휠 / ＋－ 버튼: 확대·축소
  *   - M / 미니맵 누르기: 전체 지도 (mapui.js)
  * ========================================================= */
@@ -395,11 +395,12 @@ function onMove(e) {
   if (!p || !gesture) return;
   p.x = e.clientX; p.y = e.clientY;
   if (gesture.type === 'admin') { if (e.pointerId === gesture.id) admin.move(e); return; }
-  if (gesture.type === 'tap' && Math.hypot(e.clientX - gesture.sx, e.clientY - gesture.sy) > 10) gesture.type = 'drag';
-  if (gesture.type === 'drag' && e.pointerId === gesture.id) {
-    const g = groundAt(e.clientX, e.clientY);
-    if (g) setTarget(g);
-  } else if (gesture.type === 'rotate' && e.pointerId === gesture.id) {
+  // 한 손가락·왼쪽 버튼으로 끌면 시점을 돌려요 (탭은 그대로 걷기)
+  if (gesture.type === 'tap' && Math.hypot(e.clientX - gesture.sx, e.clientY - gesture.sy) > 10) {
+    gesture.type = 'rotate';
+    gesture.lx = e.clientX; gesture.ly = e.clientY;
+  }
+  if (gesture.type === 'rotate' && e.pointerId === gesture.id) {
     cam.yawT += (e.clientX - gesture.lx) * 0.006;
     cam.yaw = cam.yawT;
     setPitch(cam.pitch + (e.clientY - gesture.ly) * 0.004);
@@ -758,6 +759,16 @@ const Campus = {
     resize();
     rafId = requestAnimationFrame(loop);
   },
+
+  // 인증샷용: 지금 화면을 한 번 더 그린 직후의 캔버스를 돌려줘요 (그린 직후라 바로 복사할 수 있어요)
+  snapshot: function () {
+    if (!renderer) return null;
+    renderer.render(scene, camera);
+    return canvas;
+  },
+
+  // 인증샷 글귀용: 지금 내 위치
+  playerPos: function () { return { x: player.x, y: player.y }; },
 
   // 테스트·디버그용
   debug: function () {
