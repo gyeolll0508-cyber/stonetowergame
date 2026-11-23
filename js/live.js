@@ -3,7 +3,8 @@
  *  - Supabase Realtime 채널 하나('campus-live')를 모두 함께 써요.
  *    (테이블이 필요 없고, 아무것도 서버에 저장하지 않아요)
  *  - 위치: 움직일 때만 0.3초마다 보내고, 가만히 있으면 5초마다 "살아 있어요" 신호
- *  - 말풍선: 보낸 순간 접속해 있는 사람에게만 보이고 기록은 남지 않아요.
+ *  - 말풍선: 보낸 순간 접속해 있는 사람에게만 보여요. 서버에는 남지 않고,
+ *    내가 보낸 말·받은 말은 이 브라우저에만 최근 LOG_MAX개까지 기록해요(💬 창).
  *  - Supabase 설정이 없거나 연결이 안 되면 조용히 꺼져요(게임은 그대로).
  * ========================================================= */
 (function () {
@@ -15,6 +16,8 @@
   const STALE_MS = 20000;     // 이만큼 소식이 없으면 사라진 걸로
   const SAY_GAP_MS = 1500;    // 말풍선 도배 방지
   const SAY_MAX = 40;
+  const LOG_KEY = 'cbnu-chat-log';
+  const LOG_MAX = 50;
 
   // 아주 기본적인 욕설 가리기
   const BAD = ['씨발', '시발', 'ㅅㅂ', 'ㅆㅂ', '병신', 'ㅂㅅ', '좆', '개새끼', '새끼', '지랄', 'fuck', 'shit'];
@@ -23,6 +26,21 @@
   const peers = new Map();    // id → { t: 마지막 소식 시각 }
   let channel = null, joined = false, h = {};
   let last = null, lastSent = 0, lastSay = 0;
+
+  // 말풍선 기록 (이 브라우저에만) — { at, name, text, me }
+  let log = [];
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(LOG_KEY) || '[]');
+    if (Array.isArray(saved)) log = saved.filter(function (e) { return e && typeof e.text === 'string'; }).slice(-LOG_MAX);
+  } catch (e) { /* 무시 */ }
+
+  function addLog(name, text, mine) {
+    const e = { at: Date.now(), name: clip(name, 10) || '익명', text: text, me: !!mine };
+    log.push(e);
+    if (log.length > LOG_MAX) log = log.slice(-LOG_MAX);
+    try { window.localStorage.setItem(LOG_KEY, JSON.stringify(log)); } catch (err) { /* 저장 못 해도 괜찮아요 */ }
+    if (h.onLog) h.onLog(e);
+  }
 
   function clip(s, n) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, n); }
   function num(v, lo, hi) { v = Number(v); return isFinite(v) ? Math.max(lo, Math.min(hi, v)) : null; }
@@ -64,11 +82,12 @@
     const x = num(p.x, 0, DATA.WORLD.w), y = num(p.y, 0, DATA.WORLD.h);
     if (x == null || y == null) return;
     const fresh = !peers.has(p.id);
-    peers.set(p.id, { t: Date.now() });
+    const name = clip(p.n, 10) || '익명';
+    peers.set(p.id, { t: Date.now(), n: name });
     const look = DATA.normLook({ hair: p.hr, face: p.fc, hairColor: p.hc });
     if (h.onPeer) h.onPeer({
       id: p.id, hair: look.hair, face: look.face, hairColor: look.hairColor,
-      name: clip(p.n, 10) || '익명',
+      name: name,
       color: DATA.COLORS.indexOf(p.c) >= 0 ? p.c : DATA.COLORS[0],
       x: x, y: y, heading: num(p.h, -10, 10) || 0, moving: !!p.m
     });
@@ -78,7 +97,9 @@
   function onSay(p) {
     if (!p || typeof p.id !== 'string' || p.id === me || !peers.has(p.id)) return;
     const text = clean(p.text);
-    if (text && h.onSay) h.onSay(p.id, text);
+    if (!text) return;
+    if (h.onSay) h.onSay(p.id, text);
+    addLog(peers.get(p.id).n, text, false);
   }
 
   function drop(id) {
@@ -133,7 +154,15 @@
       sendState(true);
       channel.send({ type: 'broadcast', event: 'say', payload: { id: me, text: t } });
       if (h.onSay) h.onSay('me', t);
+      addLog(myState().n, t, true);
       return { ok: true, text: t };
+    },
+
+    // 말풍선 기록 (오래된 것 → 최근 것)
+    log: function () { return log.slice(); },
+    clearLog: function () {
+      log = [];
+      try { window.localStorage.removeItem(LOG_KEY); } catch (e) { /* 무시 */ }
     },
 
     isOnline: function () { return joined; },
