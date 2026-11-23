@@ -287,8 +287,10 @@
     }
     const check = Campus.canBuildHere();
     if (!check.ok) { closeLayers(); toast(check.reason); return; }
+    if (Store.myTower()) { closeLayers(); refreshHud(); toast('돌탑은 한 사람당 1개만 세울 수 있어요 🪨'); return; }
     const p = Campus.getPlayer();
     const t = Store.createTower({ x: p.x, y: p.y, cat: wishCat, wish: wish });
+    if (!t) { closeLayers(); refreshHud(); toast('돌탑은 한 사람당 1개만 세울 수 있어요 🪨'); return; }
     refreshHud();
     closeLayers();
     startStacking(t);
@@ -519,6 +521,134 @@
     });
   }
 
+  /* ---------------- 내 돌탑 지우기 ---------------- */
+  //  3D 화면(index3d.html)에만 버튼이 있어요. 없으면 조용히 건너뛰어요.
+
+  let deleting = false;
+
+  function askDeleteTower() {
+    const mine = Store.myTower();
+    if (!mine || !$('mDelTower')) return;
+    $('delTowerWish').textContent = '“' + mine.wish + '” · 최고 ' + mine.best + '층';
+    openLayer('mDelTower');
+  }
+
+  function confirmDeleteTower() {
+    if (deleting || !Store.removeMyTower) return;
+    deleting = true;
+    const btn = $('btnDelTowerOk');
+    btn.disabled = true;
+    btn.textContent = '지우는 중…';
+    Store.removeMyTower().then(function (r) {
+      deleting = false;
+      btn.disabled = false;
+      btn.textContent = '🗑 지우기';
+      if (!r.ok) { toast(r.error || '지우지 못했어요'); return; }
+      closeLayers();
+      refreshHud();
+      toast('돌탑을 지웠어요. 새 돌탑을 세울 수 있어요 🌱');
+    });
+  }
+
+  /* ---------------- 계정: 다른 기기에서 이어 하기 ---------------- */
+
+  let codeMode = null;   // 'link' | 'login'
+  let codeEmail = '';
+  let accBusy = false;
+
+  function hasAccountUi() { return !!$('mAccount') && !!Store.account && Store.account().enabled; }
+
+  function renderAccountChip() {
+    const b = $('btnAccount');
+    if (!b) return;
+    if (!hasAccountUi()) { b.hidden = true; return; }
+    const a = Store.account();
+    b.hidden = false;
+    b.textContent = a.anonymous ? '🔐 기기 연결' : '✅ ' + a.email;
+    b.title = a.anonymous ? '이메일을 연결하면 다른 기기에서도 내 돌탑을 이어서 쌓을 수 있어요' : '이메일 계정으로 로그인돼 있어요';
+  }
+
+  function renderAccount() {
+    if (!hasAccountUi()) return;
+    const a = Store.account();
+    const linked = a.signedIn && !a.anonymous;
+    $('accLinked').hidden = !linked;
+    $('accLink').hidden = linked || !!codeMode;
+    $('accLogin').hidden = linked || !!codeMode;
+    $('accCode').hidden = linked || !codeMode;
+    if (linked) {
+      $('accStatus').textContent = '이 기기는 ' + a.email + ' 계정으로 로그인돼 있어요. 다른 기기에서도 같은 이메일로 로그인하면 내 돌탑이 그대로 보여요.';
+    } else if (codeMode) {
+      $('accStatus').textContent = codeEmail + '(으)로 인증 메일을 보냈어요.';
+      $('accCodeMsg').textContent = codeMode === 'link'
+        ? '메일의 링크를 누르거나, 메일에 있는 숫자 코드를 입력하면 이메일이 연결돼요. (지금 돌탑은 그대로예요)'
+        : '메일의 링크를 누르거나, 메일에 있는 숫자 코드를 입력하면 원래 계정으로 로그인돼요.';
+    } else {
+      $('accStatus').textContent = a.pendingEmail
+        ? a.pendingEmail + ' 인증을 기다리는 중이에요. 메일을 확인해 주세요.'
+        : '지금은 이 브라우저에서만 쓰는 익명 계정이에요. 이메일을 연결해 두면 다른 기기에서도 같은 사람으로 이어 할 수 있어요.';
+    }
+  }
+
+  function openAccount() {
+    if (!hasAccountUi()) return;
+    if (Store.reloadAccount) Store.reloadAccount();
+    renderAccount();
+    openLayer('mAccount');
+  }
+
+  function accRun(btn, job, onOk) {
+    if (accBusy) return;
+    accBusy = true;
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '잠시만요…';
+    job().then(function (r) {
+      accBusy = false;
+      btn.disabled = false;
+      btn.textContent = label;
+      if (!r || !r.ok) { toast((r && r.error) || '실패했어요'); return; }
+      onOk(r);
+      renderAccount();
+      renderAccountChip();
+    });
+  }
+
+  function bindAccount() {
+    if (!$('mAccount') || !$('btnAccount')) return;
+    $('btnAccount').addEventListener('click', openAccount);
+    $('btnAccClose').addEventListener('click', closeLayers);
+    $('btnLinkSend').addEventListener('click', function () {
+      const email = $('inLinkEmail').value;
+      accRun(this, function () { return Store.linkEmail(email); }, function () {
+        codeMode = 'link'; codeEmail = email.trim().toLowerCase(); $('inCode').value = '';
+        toast('인증 메일을 보냈어요 📧');
+      });
+    });
+    $('btnLoginSend').addEventListener('click', function () {
+      const email = $('inLoginEmail').value;
+      accRun(this, function () { return Store.sendLoginCode(email); }, function () {
+        codeMode = 'login'; codeEmail = email.trim().toLowerCase(); $('inCode').value = '';
+        toast('로그인 메일을 보냈어요 📧');
+      });
+    });
+    $('btnCodeOk').addEventListener('click', function () {
+      const mode = codeMode, code = $('inCode').value;
+      accRun(this, function () { return Store.verifyCode(mode, codeEmail, code); }, function () {
+        codeMode = null;
+        toast(mode === 'link' ? '✅ 이메일을 연결했어요! 다른 기기에서도 로그인할 수 있어요' : '✅ 로그인했어요! 내 돌탑을 불러올게요');
+      });
+    });
+    $('btnCodeBack').addEventListener('click', function () { codeMode = null; renderAccount(); });
+    $('btnLogout').addEventListener('click', function () {
+      if (!window.confirm('로그아웃할까요?\n돌탑은 이메일 계정에 그대로 남고, 같은 이메일로 다시 로그인하면 이어서 할 수 있어요.')) return;
+      accRun(this, function () { return Store.signOut(); }, function () {
+        closeLayers();
+        toast('로그아웃했어요');
+      });
+    });
+  }
+
   /* ---------------- 실시간 함께 보기 · 말풍선 ---------------- */
   //  3D 화면 + Supabase 연결이 있을 때만 켜져요(2D·오프라인이면 💬 버튼이 안 보여요)
 
@@ -602,6 +732,15 @@
       if (mine) startStacking(mine);
     });
     $('btnEditWish').addEventListener('click', function () { openWish('edit'); });
+    if ($('btnDelTower')) {
+      $('btnDelTower').addEventListener('click', askDeleteTower);
+      $('btnDelTowerCancel').addEventListener('click', function () {
+        const mine = Store.myTower();
+        if (mine) openTower(mine.id); else closeLayers();
+      });
+      $('btnDelTowerOk').addEventListener('click', confirmDeleteTower);
+    }
+    bindAccount();
 
     document.querySelectorAll('#listTabs button').forEach(function (b) {
       b.addEventListener('click', function () { listSort = b.dataset.sort; renderList(); });
@@ -647,7 +786,14 @@
     refreshHud();
     refreshNet();
     // 서버에서 다른 사람의 돌탑을 받아 오면 캠퍼스·배지를 다시 그려요
-    if (Store.onChange) Store.onChange(function () { refreshHud(); refreshNet(); });
+    if (Store.onChange) Store.onChange(function () {
+      refreshHud(); refreshNet(); renderAccountChip();
+      if ($('mAccount') && $('mAccount').classList.contains('open')) renderAccount();
+      // 열어 둔 돌탑이 사라졌으면(지움·계정 바뀜) 창을 닫아요
+      if (currentTowerId && !Store.getTower(currentTowerId)) closeLayers();
+    });
+    if (Store.onNotice) Store.onNotice(toast);
+    renderAccountChip();
 setupLive();
 if (prof.created) openWelcome();
 requestAnimationFrame(updateMyArrow);
