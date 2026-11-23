@@ -1,0 +1,23 @@
+/* =========================================================
+ * tower-mgmt.css — 내 돌탑 지우기 · 계정(다른 기기 연결) 화면
+ *  (index3d.html에서만 불러와요. 기존 style.css / style3d.css는 그대로)
+ * ========================================================= */
+.btn.danger { background: #ffe1dc; color: #b3392b; }
+.btn.danger:hover { background: #ffd0c8; }
+.btn.danger:disabled, .btn:disabled { opacity: .6; cursor: wait; }
+
+.del-wish {
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 12px;
+  background: #fff3dc; text-align: center; font-size: 14px; word-break: break-all;
+}
+
+.account-chip { margin-top: 4px; font-size: 12px; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+#mAccount { max-height: 88vh; overflow-y: auto; }
+.acc-box { margin: 10px 0; padding: 10px 12px; border: 2px dashed #e5d8c4; border-radius: 14px; }
+.acc-box h3 { margin: 0 0 4px; font-size: 15px; }
+.acc-box p { margin: 0 0 8px; line-height: 1.5; }
+.acc-input {
+  width: 100%; box-sizing: border-box; padding: 10px 12px; font: inherit; font-size: 16px;
+  border: 2px solid var(--line); border-radius: 12px; background: #fff;
+}
