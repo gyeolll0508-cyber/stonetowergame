@@ -12,6 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css?v=2026112206">
   <link rel="stylesheet" href="css/style3d.css?v=2026112301">
+  <link rel="stylesheet" href="css/tower-mgmt.css?v=2026112401">
   <!-- Three.js를 인터넷(CDN)에서 불러와요. import 'three' → 아래 주소 -->
   <script type="importmap">
     { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
@@ -45,6 +46,7 @@
       </button>
       <div id="netBadge" class="badge">연결 중…</div>
       <div id="liveCount" class="badge live-count" title="지금 캠퍼스에 함께 접속해 있는 사람 수 (나 포함)" hidden></div>
+      <button id="btnAccount" class="chip account-chip" type="button" hidden>🔐 기기 연결</button>
     </div>
   </header>
 
@@ -157,6 +159,47 @@
     <button id="btnHelpClose" class="btn primary wide" type="button">알겠어요!</button>
   </div>
 
+  <!-- 내 돌탑 지우기 확인 -->
+  <div id="mDelTower" class="layer modal" role="dialog" aria-labelledby="delTowerTitle">
+    <h2 id="delTowerTitle">돌탑을 지울까요?</h2>
+    <p class="sub">지운 돌탑은 <b>모두의 캠퍼스에서 사라지고 되돌릴 수 없어요.</b><br>지운 뒤에는 새 돌탑을 세울 수 있어요.</p>
+    <p id="delTowerWish" class="del-wish"></p>
+    <div class="row-btns">
+      <button id="btnDelTowerCancel" class="btn" type="button">취소</button>
+      <button id="btnDelTowerOk" class="btn danger" type="button">🗑 지우기</button>
+    </div>
+  </div>
+
+  <!-- 계정: 다른 기기에서 이어 하기 -->
+  <div id="mAccount" class="layer modal" role="dialog" aria-labelledby="accTitle">
+    <h2 id="accTitle">🔐 다른 기기에서도 내 돌탑</h2>
+    <p id="accStatus" class="sub"></p>
+    <section id="accLink" class="acc-box">
+      <h3>① 이 기기 계정에 이메일 연결</h3>
+      <p class="muted small">지금 돌탑과 기록은 그대로 두고 이메일만 연결해요.</p>
+      <input id="inLinkEmail" class="acc-input" type="email" autocomplete="email" placeholder="이메일 주소">
+      <button id="btnLinkSend" class="btn primary wide" type="button">인증 메일 보내기</button>
+    </section>
+    <section id="accLogin" class="acc-box">
+      <h3>② 다른 기기에서 로그인</h3>
+      <p class="muted small">원래 기기에서 이메일을 연결해 둔 계정으로 로그인해요. 새 계정은 만들지 않아요.</p>
+      <input id="inLoginEmail" class="acc-input" type="email" autocomplete="email" placeholder="연결해 둔 이메일 주소">
+      <button id="btnLoginSend" class="btn wide" type="button">로그인 메일 보내기</button>
+    </section>
+    <section id="accCode" class="acc-box" hidden>
+      <p id="accCodeMsg" class="muted small"></p>
+      <input id="inCode" class="acc-input" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="메일의 숫자 코드">
+      <div class="row-btns">
+        <button id="btnCodeBack" class="btn" type="button">이메일 다시 입력</button>
+        <button id="btnCodeOk" class="btn primary" type="button">확인</button>
+      </div>
+    </section>
+    <section id="accLinked" class="acc-box" hidden>
+      <button id="btnLogout" class="btn wide" type="button">로그아웃</button>
+    </section>
+    <button id="btnAccClose" class="btn wide" type="button">닫기</button>
+  </div>
+
   <!-- 돌탑 상세 -->
   <aside id="sTower" class="layer sheet" aria-labelledby="twName">
     <div class="sheet-grab"></div>
@@ -182,6 +225,7 @@
       <div id="twOwner" class="owner-actions" hidden>
         <button id="btnRestack" class="btn primary" type="button">🪨 다시 쌓기</button>
         <button id="btnEditWish" class="btn" type="button">✏️ 소원 수정</button>
+        <button id="btnDelTower" class="btn danger" type="button">🗑 지우기</button>
       </div>
     </div>
     <h3>💬 응원 한마디</h3>
@@ -271,7 +315,7 @@
   <!-- 온라인 공유(Supabase): 라이브러리 + 연결 정보. 불러오지 못하면 브라우저 저장만 사용 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
   <script src="js/supabase-config.js?v=2026112206"></script>
-  <script src="js/store.js?v=2026112206"></script>
+  <script src="js/store.js?v=2026112401"></script>
   <script src="js/live.js?v=2026112301"></script>
   <!-- 관리자 모드에서 저장한 건물 배치 불러오기 (index3d.html?admin 으로 열면 관리자 버튼이 보여요) -->
   <script src="js/layout-data.js?v=2026112301"></script>
@@ -329,7 +373,7 @@
         // 서버에 저장된 건물 배치를 먼저 받아 와요 (늦으면 2.5초 뒤 지난번 배치로 시작)
         return window.Layout ? Layout.ready(2500) : null;
       }).then(function () {
-        return load('js/main.js?v=2026112301');
+        return load('js/main.js?v=2026112402');
       }).then(function () {
         hideLoading();
         if (reason === 'file') App.toast('3D는 로컬 서버로 열어야 보여요. 지금은 2D 지도예요 🗺️');

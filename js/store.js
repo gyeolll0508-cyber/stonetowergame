@@ -92,6 +92,9 @@
     getTower: function (id) { return state.towers[id] || null; },
 
     createTower: function (o) {
+      // 1인 1탑: 이미 내 돌탑이 있으면 새로 만들지 않아요 (서버도 UNIQUE(owner_id)로 막아요)
+      const had = Store.myTower();
+      if (had && !had.demo) return null;
       const p = state.profile || { name: '익명', color: DATA.COLORS[0] };
       const now = Date.now();
       const t = {
@@ -211,6 +214,34 @@
       });
     },
 
+    // 내 돌탑 지우기 → Promise<{ ok, error }>
+    //  서버(Supabase)에서 먼저 지우고, 성공했을 때만 이 브라우저에서도 지워요.
+    //  (실패하면 아무것도 지우지 않아요)
+    removeMyTower: function () {
+      const t = Store.myTower();
+      if (!t || t.demo) return Promise.resolve({ ok: false, error: '지울 내 돌탑이 없어요' });
+      return Online.removeOwn(t).then(function (r) {
+        if (!r.ok) return r;
+        delete state.towers[t.id];
+        delete state.liked[t.id];
+        if (state.myId === t.id) state.myId = null;
+        save();
+        Online.emit();
+        return r;
+      });
+    },
+
+    // 계정 (다른 기기에서 같은 사람으로 이어 하기)
+    //  account(): { enabled, signedIn, anonymous, email, pendingEmail }
+    account: function () { return Online.account(); },
+    linkEmail: function (email) { return Online.linkEmail(email); },
+    sendLoginCode: function (email) { return Online.sendLogin(email); },
+    verifyCode: function (mode, email, code) { return Online.verifyCode(mode, email, code); },
+    signOut: function () { return Online.signOut(); },
+    reloadAccount: function () { return Online.reloadUser(); },
+    // 화면에 띄울 안내 (예: 이미 돌탑이 있어서 새로 못 만듦)
+    onNotice: function (fn) { Online.onNotice(fn); },
+
     // 온라인 공유 상태: 'off'(설정 없음) | 'connecting' | 'online' | 'readonly'(구경만) | 'offline'
     onlineStatus: function () { return Online.status(); },
 
@@ -248,7 +279,10 @@
       console.warn('[온라인] stone_towers에 tone 칸이 없어서 꾸미기 테마는 이 브라우저에만 저장해요:', err.message);
     }
     const listeners = [];
-    let client = null, userId = null, ready = null;
+    let client = null, userId = null, ready = null, authUser = null;
+    const notices = [];       // 화면에 알릴 메시지 (Store.onNotice)
+    const deletedRids = {};   // 방금 지운 내 돌탑 (지우기 전에 받아 온 목록에 다시 나타나지 않게)
+    function notice(msg) { notices.forEach(function (fn) { try { fn(msg); } catch (e) { console.error(e); } }); }
     let status = enabled ? 'connecting' : 'off';
     const chains = {};
 
@@ -265,6 +299,28 @@
       return k ? state.towers[k] : null;
     }
 
+    // 지금 로그인한 사용자 바꾸기
+    //  이 브라우저가 기억하는 사용자(state.uid)와 다르면(다른 기기 로그인·로그아웃)
+    //  예전 계정의 돌탑은 "내 돌탑"에서 떼어 내요. 서버의 돌탑은 그대로 예전 계정 것으로 남아요.
+    //  → 반환값: 사용자가 바뀌었으면 true
+    function setUser(user) {
+      authUser = user || null;
+      const uid = user ? user.id : null;
+      if (!uid || uid === userId) return false;
+      const before = userId;
+      userId = uid;
+      const prev = state.uid;
+      state.uid = uid;
+      let changed = !!before; // 접속 중에 다른 계정으로 바뀜
+      if (prev && prev !== uid) {
+        changed = true;
+        const t = state.myId && state.towers[state.myId];
+        if (t && t.rid) { t.dirty = false; state.myId = null; }
+      }
+      save();
+      return changed;
+    }
+
     // 익명 로그인 (이미 로그인돼 있으면 그대로 사용)
     function getReady() {
       if (!ready) {
@@ -275,7 +331,7 @@
             return s.data.session;
           });
         }).then(function (session) {
-          userId = session.user.id;
+          setUser(session.user);
         }).catch(function (e) {
           ready = null; // 다음에 다시 시도
           throw e;
@@ -307,11 +363,12 @@
     function merge(rows) {
       const seen = {};
       rows.forEach(function (row) {
+        if (deletedRids[row.id]) return;
         seen[row.id] = true;
         const mine = row.owner_id === userId;
         let t = towerByRid(row.id);
         // 서버에 있는 내 돌탑과 이 브라우저의 (아직 안 올린) 내 돌탑을 연결
-        if (!t && mine && state.myId && state.towers[state.myId] && !state.towers[state.myId].demo) {
+        if (!t && mine && state.myId && state.towers[state.myId] && !state.towers[state.myId].demo && !state.towers[state.myId].rid) {
           t = state.towers[state.myId];
         }
         if (t && (mine || t.id === state.myId)) {
@@ -345,10 +402,18 @@
         cat: t.cat, x: Math.round(t.x - (state.ox || 0)), y: Math.round(t.y - (state.oy || 0))
       }).select('id, created_at').single().then(function (r) {
         if (r.error && r.error.code === '23505') {
-          // 이미 서버에 내 돌탑이 있음(1인 1탑) → 그 돌탑과 연결
-          return client.from(TABLE).select('id').eq('owner_id', userId).single().then(function (q) {
+          // 이미 서버에 내 돌탑이 있음(1인 1탑, UNIQUE(owner_id))
+          //  - 같은 돌탑(올리다가 응답만 못 받은 경우) → 그 돌탑과 연결
+          //  - 다른 돌탑(다른 기기에서 이미 세운 경우) → 서버 돌탑을 지키고, 방금 만든 돌탑은 취소
+          return client.from(TABLE).select('id, nickname, wish').eq('owner_id', userId).single().then(function (q) {
             if (q.error) throw q.error;
-            t.rid = q.data.id;
+            if (q.data.wish === clip(t.wish, 60) && q.data.nickname === (clip(t.name, 10) || '익명')) {
+              t.rid = q.data.id;
+              return;
+            }
+            const e = new Error('이미 돌탑이 있어요');
+            e.duplicate = true;
+            throw e;
           });
         }
         if (r.error) throw r.error;
@@ -389,6 +454,15 @@
         save();
         setStatus('online');
       }, function (err) {
+        if (err && err.duplicate) {
+          // 1인 1탑: 이 기기에서 새로 만든 돌탑은 지우고 서버의 내 돌탑을 받아 와요
+          delete state.towers[t.id];
+          if (state.myId === t.id) state.myId = null;
+          save();
+          notice('이미 세운 돌탑이 있어서 새 돌탑은 만들 수 없어요. 원래 돌탑을 불러올게요 🪨');
+          refresh();
+          return;
+        }
         console.warn('[온라인] 저장하지 못했어요. 다음에 다시 시도해요:', err);
         setStatus(status === 'readonly' ? 'readonly' : 'offline');
       });
@@ -427,6 +501,18 @@
       client = lib.createClient(url, key, {
         auth: { persistSession: true, autoRefreshToken: true, storageKey: 'cbnu-stonetower-auth' }
       });
+      // 로그인 상태가 바뀌면(이메일 인증 완료·다른 기기 로그인·로그아웃) 내 돌탑을 다시 맞춰요
+      //  (콜백 안에서 바로 Supabase를 부르면 멈출 수 있어서 setTimeout으로 미뤄요)
+      client.auth.onAuthStateChange(function (event, session) {
+        setTimeout(function () {
+          if (event === 'SIGNED_OUT' || !session) {
+            authUser = null; userId = null; ready = null;
+            refresh(); // 새 익명 계정으로 다시 접속
+            return;
+          }
+          switchTo(session.user);
+        }, 0);
+      });
       refresh();
       setInterval(function () { if (!document.hidden) refresh(); }, 30000);
       document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
@@ -443,9 +529,143 @@
       }, function () { return { ok: false, error: '서버에 연결하지 못했어요' }; });
     }
 
+    // 내 돌탑 지우기 (RLS: owner_id = auth.uid() 인 행만 지워져요 — supabase/tower_management.sql)
+    function removeOwn(t) {
+      if (!enabled) return Promise.resolve({ ok: true, local: true });
+      const job = (chains[t.id] || Promise.resolve()).then(getReady).then(function () {
+        if (!t.rid) return { ok: true, local: true }; // 아직 서버에 안 올라간 돌탑
+        const rid = t.rid;
+        return client.from(TABLE).delete().eq('id', rid).eq('owner_id', userId).select('id').then(function (r) {
+          if (r.error && r.error.code === '42501') return { ok: false, error: '서버에서 지울 권한이 없어요. Supabase에 supabase/tower_management.sql을 실행했는지 확인해 주세요' };
+          if (r.error) return { ok: false, error: '서버 오류: ' + (r.error.message || '') };
+          if (r.data && r.data.length) { deletedRids[rid] = true; return { ok: true }; }
+          // 0행: 이미 없어졌거나(관리자 삭제 등) 삭제 권한(RLS)이 없음
+          return client.from(TABLE).select('id').eq('id', rid).then(function (q) {
+            if (!q.error && (!q.data || !q.data.length)) { deletedRids[rid] = true; return { ok: true }; }
+            return { ok: false, error: '서버에서 지울 권한이 없어요. Supabase에 supabase/tower_management.sql을 실행했는지 확인해 주세요' };
+          });
+        });
+      }).catch(function () {
+        return { ok: false, error: '서버에 연결하지 못했어요. 잠시 후 다시 해 주세요' };
+      });
+      chains[t.id] = job;
+      return job;
+    }
+
+    /* ----- 계정: 익명 계정에 이메일 연결 · 다른 기기 로그인 -----
+     *  - 연결: auth.updateUser({ email }) → 익명 계정이 그대로 이메일 계정이 돼요(user.id 유지 → 돌탑 owner_id 유지)
+     *  - 다른 기기: signInWithOtp({ shouldCreateUser: false }) → 연결해 둔 계정으로만 로그인(새 계정 안 만듦)
+     *  - 메일의 링크를 누르거나, 메일에 있는 6자리 코드를 입력해서 인증해요
+     * ------------------------------------------------------- */
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    function redirectTo() { return location.origin + location.pathname; }
+    function authError(err) {
+      const c = (err && err.code) || '';
+      const m = (err && err.message) || '';
+      if (c === 'email_exists' || /already (been )?registered/i.test(m)) return '이미 다른 계정에 연결된 이메일이에요. 그 계정으로 로그인하려면 “다른 기기에서 로그인”을 써 주세요';
+      if (c === 'otp_disabled' || c === 'signup_disabled' || /signups not allowed/i.test(m)) return '이 이메일로 연결된 계정이 없어요. 먼저 원래 기기에서 이메일을 연결해 주세요';
+      if (c === 'otp_expired' || /expired|invalid/i.test(m)) return '코드가 틀렸거나 만료됐어요. 메일을 다시 받아 주세요';
+      if (c === 'over_email_send_rate_limit' || /rate limit|seconds/i.test(m)) return '메일을 너무 자주 보냈어요. 잠시 후 다시 해 주세요';
+      if (c === 'email_provider_disabled') return 'Supabase에서 Email 로그인이 꺼져 있어요';
+      return '인증 오류: ' + (m || '알 수 없음');
+    }
+    function authCall(p) {
+      return p.then(function (r) {
+        if (r.error) return { ok: false, error: authError(r.error) };
+        return { ok: true, data: r.data };
+      }, function (e) { return { ok: false, error: authError(e) }; });
+    }
+    function badEmail(email) { return !EMAIL_RE.test(email) ? { ok: false, error: '이메일 주소를 확인해 주세요' } : null; }
+    function needOnline() { return enabled ? null : { ok: false, error: '온라인 연결이 없어서 쓸 수 없어요' }; }
+
+    function account() {
+      const u = authUser;
+      return {
+        enabled: enabled,
+        signedIn: !!u,
+        anonymous: !u || !!u.is_anonymous || !u.email,
+        email: (u && u.email) || '',
+        pendingEmail: (u && u.new_email) || ''
+      };
+    }
+
+    // 지금 익명 계정에 이메일 연결 → 인증 메일 발송
+    function linkEmail(email) {
+      email = String(email || '').trim().toLowerCase();
+      const bad = needOnline() || badEmail(email);
+      if (bad) return Promise.resolve(bad);
+      return getReady().then(function () {
+        if (!account().anonymous) return { ok: false, error: '이미 이메일이 연결된 계정이에요' };
+        return authCall(client.auth.updateUser({ email: email }, { emailRedirectTo: redirectTo() }));
+      }, function () { return { ok: false, error: '서버에 연결하지 못했어요' }; });
+    }
+
+    // 다른 기기에서 로그인 → 인증 메일 발송 (연결된 계정이 없으면 새로 만들지 않아요)
+    function sendLogin(email) {
+      email = String(email || '').trim().toLowerCase();
+      const bad = needOnline() || badEmail(email);
+      if (bad) return Promise.resolve(bad);
+      const acc = account();
+      if (acc.signedIn && !acc.anonymous) {
+        return Promise.resolve(acc.email === email
+          ? { ok: false, error: '이미 이 이메일로 로그인돼 있어요' }
+          : { ok: false, error: '먼저 로그아웃한 뒤 다른 이메일로 로그인해 주세요' });
+      }
+      // 이 기기의 익명 계정에 돌탑이 있으면 바꾸지 않아요(그 돌탑을 잃지 않게)
+      const mine = state.myId && state.towers[state.myId];
+      if (mine && !mine.demo) {
+        return Promise.resolve({ ok: false, error: '이 기기에서 세운 돌탑이 있어요. 이 돌탑을 지키려면 “이메일 연결”을 쓰고, 다른 계정으로 바꾸려면 먼저 이 돌탑을 지워 주세요' });
+      }
+      return authCall(client.auth.signInWithOtp({
+        email: email,
+        options: { shouldCreateUser: false, emailRedirectTo: redirectTo() }
+      }));
+    }
+
+    // 메일의 6자리 코드 확인 (mode: 'link' 이메일 연결 | 'login' 다른 기기 로그인)
+    function verifyCode(mode, email, code) {
+      email = String(email || '').trim().toLowerCase();
+      code = String(code || '').replace(/\s+/g, '');
+      if (!enabled) return Promise.resolve(needOnline());
+      if (!/^\d{6,10}$/.test(code)) return Promise.resolve({ ok: false, error: '메일에 있는 숫자 코드를 입력해 주세요' });
+      return authCall(client.auth.verifyOtp({ email: email, token: code, type: mode === 'link' ? 'email_change' : 'email' }))
+        .then(function (r) {
+          if (r.ok && r.data && r.data.user) switchTo(r.data.user);
+          return r;
+        });
+    }
+
+    // 로그아웃 (이메일이 연결된 계정만) → 이 기기는 새 익명 방문자가 돼요. 돌탑은 이메일 계정에 남아요
+    function signOut() {
+      if (!enabled) return Promise.resolve(needOnline());
+      if (account().anonymous) return Promise.resolve({ ok: false, error: '이메일을 연결하지 않은 계정은 로그아웃하면 돌탑을 다시 찾을 수 없어요' });
+      return authCall(client.auth.signOut());
+    }
+
+    // 다른 탭에서 인증하면 이 탭의 계정 정보도 갱신
+    function reloadUser() {
+      if (!enabled || !authUser) return Promise.resolve();
+      return client.auth.getUser().then(function (r) {
+        if (r.data && r.data.user) switchTo(r.data.user);
+      }, function () {});
+    }
+
+    // 계정 정보 반영 → 다른 계정이 됐으면 돌탑 목록을 바로 다시 받아 와요
+    function switchTo(user) {
+      if (setUser(user)) { ready = Promise.resolve(); refresh(); } else emit();
+    }
+
     return {
       push: push,
       adminDelete: adminDelete,
+      removeOwn: removeOwn,
+      account: account,
+      linkEmail: linkEmail,
+      sendLogin: sendLogin,
+      verifyCode: verifyCode,
+      signOut: signOut,
+      reloadUser: reloadUser,
+      onNotice: function (fn) { notices.push(fn); },
       emit: emit,
       client: function () { return client; },
       status: function () { return status; },
