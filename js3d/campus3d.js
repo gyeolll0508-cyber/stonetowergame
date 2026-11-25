@@ -12,11 +12,11 @@
  *   - M / 미니맵 누르기: 전체 지도 (mapui.js)
  * ========================================================= */
 import * as THREE from 'three';
-import * as L from './logic.js?v=2026112206';
-import { buildWorld } from './world.js?v=2026112206';
-import { makeTower, makeCharacter } from './actors.js?v=2026112206';
-import * as MapUI from './mapui.js';
-import * as Admin from './admin.js?v=2026112209';
+import * as L from './logic.js?v=2026112501';
+import { buildWorld } from './world.js?v=2026112501';
+import { makeTower, makeCharacter, makeBuildSite } from './actors.js?v=2026112502';
+import * as MapUI from './mapui.js?v=2026112503';
+import * as Admin from './admin.js?v=2026112501';
 const DATA = window.DATA;
 const Store = window.Store;
 
@@ -33,8 +33,14 @@ let running = false, rafId = 0, lastT = 0, time = 0, firstFrame = true;
 let trees = [];
 let mobile = false;
 
-const cam = { yaw: 0, yawT: 0, pitch: 0.92, dist: 36, x: 0, z: 0, free: false, fx: 0, fy: 0 };
-const player = { x: DATA.START.x, y: DATA.START.y, tx: null, ty: null, name: '나', color: DATA.COLORS[0], walk: 0, moving: false, heading: Math.PI };
+// 처음 들어오면 정문 바로 안쪽, 길 한가운데에서 시작해요 (정문을 옮기면 같이 따라가요)
+const ENTRY = (function () {
+  const g = DATA.PLACES.find(function (p) { return p.type === 'gate'; });
+  const e = g && { x: g.x + g.w / 2, y: g.y - 90 };
+  return e && !L.blocked(e.x, e.y) ? e : DATA.START;
+})();
+const cam = { yaw: 0, yawT: 0, pitch: 0.714, dist: 36, x: 0, z: 0, free: false, fx: 0, fy: 0 };
+const player = { x: ENTRY.x, y: ENTRY.y, tx: null, ty: null, name: '나', color: DATA.COLORS[0], walk: 0, moving: false, heading: Math.PI };
 const npcs = [];
 const peers = new Map();    // 실시간으로 함께 접속한 사람: id → 캐릭터
 const BUBBLE_SEC = 5;
@@ -151,8 +157,31 @@ function updatePeers(dt) {
     c.moving = c.remoteMoving || d > 3;
     if (c.moving) c.walk += dt;
     placeChar(c);
+    updateSite(c, dt);
     updateBubble(c);
   });
+}
+
+// 돌 쌓는 중인 사람: 캐릭터 앞에 쌓고 있는 돌탑을 보여 줘요
+function isBuilding(c) { return c.build >= 0 && !c.moving; }
+// 친구를 돕는 중이면 돌탑은 주인 앞에 하나만 보여 줘요
+function ownSite(c) { return isBuilding(c) && !(c.helping && peers.has(c.helping)); }
+function updateSite(c, dt) {
+  if (ownSite(c) && !c.site) {
+    c.site = makeBuildSite(c.id);
+    const p = L.toV3(c.x, c.y);
+    c.site.group.position.set(p.x + Math.sin(c.th) * 1.05, 0, p.z + Math.cos(c.th) * 1.05);
+    c.site.group.rotation.y = c.th;
+    scene.add(c.site.group);
+  }
+  if (!c.site) return;
+  if (ownSite(c)) c.site.set(c.build);
+  else c.site.close();
+  c.site.update(dt);
+  if (c.site.done()) clearSite(c);
+}
+function clearSite(c) {
+  if (c.site) { scene.remove(c.site.group); c.site = null; }
 }
 
 // 머리 위 말풍선 (BUBBLE_SEC초 뒤에 사라짐)
@@ -175,7 +204,7 @@ function placeChar(c) {
   const p = L.toV3(c.x, c.y);
   c.mesh.root.position.set(p.x, 0, p.z);
   c.mesh.root.rotation.y = c.heading;
-  c.mesh.animate(c.walk, c.moving);
+  c.mesh.animate(c.walk, c.moving, isBuilding(c) ? time + c.buildShift : null);
 }
 
 /* ---------------- 매 프레임 ---------------- */
@@ -600,7 +629,11 @@ const Campus = {
           towers: towerList.length ? towerList : Store.towers()
         };
       },
-      canOpen: function () { return running && !adminOn() && !(opts.blockKeys && opts.blockKeys()); }
+      canOpen: function () { return running && !adminOn() && !(opts.blockKeys && opts.blockKeys()); },
+      goTo: function (x, y, name, north) {
+        const s = Campus.goTo(x, y, north);
+        if (window.App) App.toast('🏃 ' + (name || L.locationName(s.x, s.y)) + (name ? ' 앞으로' : '(으)로') + ' 이동했어요');
+      }
     });
 
     // 관리자 모드 (건물 배치 바꾸기·추가)
@@ -654,7 +687,10 @@ const Campus = {
   getPlayer: function () { return { x: player.x, y: player.y }; },
 
   /* ---- 실시간 함께 보기 (live.js에서 호출) ---- */
-  getPlayerState: function () { return { x: player.x, y: player.y, h: player.heading, m: player.moving }; },
+  getPlayerState: function () {
+    const st = window.Stack && Stack.progress ? Stack.progress() : -1;   // 쌓는 중이면 층수
+    return { x: player.x, y: player.y, h: player.heading, m: player.moving && running, b: st };
+  },
 
   upsertPeer: function (p) {
     if (!scene) return;
@@ -668,6 +704,9 @@ const Campus = {
       peers.set(p.id, c);
     }
     c.tx = p.x; c.ty = p.y; c.th = p.heading; c.remoteMoving = p.moving;
+    if (!(c.build >= 0)) c.buildShift = Math.random() * 1.6;   // 여럿이 쌓을 때 동작이 똑같이 겹치지 않게
+    c.helping = p.helping || '';
+    c.build = p.build >= 0 ? p.build : -1;                      // 쌓은 층수, -1이면 쌓는 중이 아님
     if (c.color !== p.color) { c.color = p.color; c.mesh.setColor(p.color); }
     const lk = p.hair + '|' + p.face + '|' + p.hairColor;
     if (c.lookKey !== lk) { c.lookKey = lk; c.mesh.setLook(p); }
@@ -680,6 +719,7 @@ const Campus = {
     scene.remove(c.mesh.root);
     removeLabel(c.label);
     clearBubble(c);
+    clearSite(c);
     peers.delete(id);
   },
 
@@ -687,6 +727,12 @@ const Campus = {
   showBubble: function (id, text) {
     const c = id === 'me' ? player : peers.get(id);
     if (c) showBubble(c, text);
+  },
+
+  // 지운 말이 아직 머리 위에 떠 있으면 없애요
+  hideBubble: function (id, text) {
+    const c = id === 'me' ? player : peers.get(id);
+    if (c && c.bubble && c.bubble.el.textContent === text) clearBubble(c);
   },
 
   zoomBy: function (f) {
@@ -733,6 +779,59 @@ const Campus = {
     Object.keys(keys).forEach(function (k) { keys[k] = false; });
     cam.free = false;
     return spot;
+  },
+
+  // 지도에서 고른 자리로 이동 (막힌 곳이면 제일 가까운 빈자리로). north면 북쪽(건물)을 바라봐요
+  goTo: function (x, y, north) {
+    const b = L.BOUND;
+    x = Math.max(b.x1 + 6, Math.min(b.x2 - 6, x));
+    y = Math.max(b.y1 + 6, Math.min(b.y2 - 6, y));
+    let spot = L.blocked(x, y) ? null : { x: x, y: y };
+    for (let r = 8; r <= 600 && !spot; r += 8) {
+      for (let k = 0; k < 24 && !spot; k++) {
+        // 남쪽(앞)부터 좌우로 번갈아 살펴봐요
+        const a = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 12;
+        const px = x + Math.sin(a) * r, py = y + Math.cos(a) * r;
+        if (!L.blocked(px, py)) spot = { x: px, y: py };
+      }
+    }
+    if (!spot) spot = { x: ENTRY.x, y: ENTRY.y };
+    player.x = spot.x; player.y = spot.y;
+    player.tx = player.ty = null;
+    player.moving = false;
+    if (north) { player.heading = Math.PI; cam.yaw = cam.yawT = 0; }
+    Object.keys(keys).forEach(function (k) { keys[k] = false; });
+    cam.free = false;
+    const v = L.toV3(spot.x, spot.y);
+    cam.x = v.x; cam.z = v.z;
+    return spot;
+  },
+
+  // 돌탑을 쌓는 사람(at: 자리와 방향)의 돌탑 맞은편으로 이동해서 돌탑을 바라봐요
+  //  맞은편이 막혀 있으면 돌탑 둘레에서 가장 가까운 빈자리로
+  joinBeside: function (at) {
+    const R = 10.5;   // 사람과 쌓는 돌탑 사이 거리(px) — updateSite의 1.05m와 같아요
+    const sx = at.x + Math.sin(at.h) * R, sy = at.y + Math.cos(at.h) * R;   // 돌탑 자리
+    let spot = null;
+    for (let k = 0; k < 13 && !spot; k++) {
+      const a = at.h + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 8;
+      const px = sx + Math.sin(a) * R, py = sy + Math.cos(a) * R;
+      if (!L.blocked(px, py)) spot = { x: px, y: py };
+    }
+    // 벽 앞이라 돌탑 둘레가 다 막혔으면 부른 사람 바로 옆에
+    [1, -1].forEach(function (d) {
+      const px = at.x + Math.cos(at.h) * 11 * d, py = at.y - Math.sin(at.h) * 11 * d;
+      if (!spot && !L.blocked(px, py)) spot = { x: px, y: py };
+    });
+    if (!spot) { Campus.teleport(at.x, at.y); return; }
+    player.x = spot.x; player.y = spot.y;
+    player.tx = player.ty = null;
+    player.moving = false;
+    player.heading = Math.atan2(sx - spot.x, sy - spot.y);
+    Object.keys(keys).forEach(function (k) { keys[k] = false; });
+    cam.free = false;
+    const v = L.toV3(spot.x, spot.y);
+    cam.x = v.x; cam.z = v.z;   // 카메라도 바로 따라가게
   },
 
   canBuildHere: function (ignoreId) {

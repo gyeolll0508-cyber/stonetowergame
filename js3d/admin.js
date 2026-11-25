@@ -13,7 +13,7 @@
  *        오른쪽 드래그/Q·E = 회전 · Delete = 지우기 · Esc = 선택 해제 · Ctrl+S = 저장
  * ========================================================= */
 import * as THREE from 'three';
-import * as L from './logic.js?v=2026112206';
+import * as L from './logic.js?v=2026112501';
 
 const DATA = window.DATA;
 const Store = window.Store;

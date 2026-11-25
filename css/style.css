@@ -386,6 +386,8 @@ body.stacking .mode-link { display: none; }
 .deco-opt.on { background: #ffe2a8; box-shadow: 0 0 0 2px #e0952f; }
 .deco-opt:active { transform: scale(.95); }
 .swatches.sm { gap: 8px; }
+.swatch-label { margin: 8px 0 6px; font-size: 12.5px; color: var(--muted); }
+.swatch-label:first-child { margin-top: 0; }
 .swatches.sm .swatch { width: 28px; height: 28px; }
 @media (min-width: 700px) {
   .modal.wide { width: min(94vw, 720px); }
