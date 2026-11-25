@@ -73,7 +73,7 @@ body.stacking #labels3d { display: none; }
   position: fixed;
   left: 50%;
   bottom: calc(80px + var(--safe-bottom));
-  z-index: 11;
+  z-index: 13;   /* 'UI 접기' 버튼보다 위 */
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -107,6 +107,22 @@ body.stacking #labels3d { display: none; }
 .chat-log li.me b { color: #c0701f; }
 .chat-log li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .chat-log li time { flex: none; color: var(--muted); font-size: 11px; }
+.chat-del {
+  flex: none;
+  align-self: center;
+  width: 32px; height: 32px;
+  margin: -4px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.chat-del:hover { background: #ffe1dc; }
+.chat-del:active { transform: scale(.9); }
+.chat-del:focus-visible { outline: 3px solid #6c9ef0; }
 .chat-log li.empty { color: var(--muted); font-size: 13px; justify-content: center; }
 .chatbar { display: flex; gap: 6px; }
 .chatbar input {
@@ -161,16 +177,68 @@ body.stacking .chatbox, body.stacking #btnChat { display: none; }
 .ui-fold:active { transform: translateY(calc(-50% + 2px)); box-shadow: 0 1px 0 var(--line); }
 body.stacking .ui-fold, body.admin-on .ui-fold { display: none; }
 body.ui-folded .ui-fold { background: var(--primary-2); }
-body.ui-folded:not(.stacking):not(.admin-on) :is(.hud, .zoom, .actionbar, .mode-link, .my-arrow, .chatbox,
-  .minimap, .minimap-show, .edge-notice) { display: none !important; }
+body.ui-folded:not(.stacking):not(.admin-on) :is(.hud, .actionbar, .mode-link, .my-arrow, .chatbox,
+  .map-dock, .edge-notice) { display: none !important; }
+/* UI를 접어도 인증샷 버튼은 남겨요 */
+body.ui-folded .zoom > :not(.photo-btn) { display: none; }
 
 /* 시점 회전 버튼 (확대·축소 버튼과 같은 모양) */
 .zoom .rot { font-size: 20px; }
 .zoom .rot[hidden] { display: none; }
 #tiltUp, #tiltDown { font-size: 16px; }
 .zoom button { touch-action: none; user-select: none; -webkit-user-select: none; }
-/* 버튼이 6개라 2줄로: [＋ －] [⟲ ⟳] [▲ ▼] */
-.zoom { display: grid; grid-template-columns: repeat(2, 42px); }
+/* 오른쪽 아래 2줄: [확대 축소] [음악 인증샷] */
+.zoom {
+  display: grid;
+  grid-template-columns: repeat(2, 42px);
+  top: auto;
+  bottom: calc(16px + var(--safe-bottom));
+  transform: none;
+}
+.zoom button { display: grid; place-items: center; padding: 0; color: var(--ink); }
+.zoom .mag { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+@media (max-width: 900px) { .zoom { bottom: calc(86px + var(--safe-bottom)); } }
+
+/* ---------------- 상단 배치 ----------------
+ *  왼쪽: 내 프로필 보기 → 그 아래 지도 + 도움말 / 가운데: 장소 / 오른쪽: 내 최고·접속자 */
+.hud { display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr); }
+.hud > .hud-col { pointer-events: none; }
+.hud-col > * { pointer-events: auto; }
+.hud .loc { max-width: 100%; }
+.profile-chip { align-self: flex-start; max-width: none; min-height: 36px; font-family: 'Jua', sans-serif; white-space: nowrap; }
+.badge[hidden] { display: none; }
+.map-dock {
+  position: fixed;
+  left: 12px;
+  top: calc(56px + var(--safe-top));
+  z-index: 10;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: none;
+}
+.map-dock > * { pointer-events: auto; }
+.help-btn {
+  flex: none;
+  width: 42px; height: 42px;
+  padding: 0;
+  border: 2.5px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--line);
+  color: var(--ink);
+  font-family: 'Jua', sans-serif;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.help-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+.help-btn:focus-visible { outline: 3px solid #6c9ef0; outline-offset: 2px; }
+body.stacking .map-dock, body.admin-on .help-btn { display: none; }
+@media (max-width: 560px) {
+  .map-dock { left: 8px; }
+  .hud .my-card { width: 112px; }
+}
 
 /* 3D 돌 쌓기: 떠오르는 글자(+1층, 아슬아슬!)와 15층 별 */
 .sk3d-layer {
@@ -258,6 +326,62 @@ body.ui-folded:not(.stacking):not(.admin-on) :is(.hud, .zoom, .actionbar, .mode-
 .bgm-btn.off, .zoom .bgm.off { background: #ece6da; }
 .zoom .bgm { font-size: 19px; }
 
+/* 돌 쌓기 안내: 가운데 정렬을 지키면서 통통 (style.css의 bob은 가로 위치를 잃어서) */
+.sk-tip { animation-name: tipBob; width: max-content; max-width: calc(100vw - 40px); }
+@keyframes tipBob { 50% { transform: translate(-50%, -5px); } }
+/* 휴대폰: 긴 소원이 위쪽 정보칸·음악 버튼과 겹치지 않게 */
+@media (max-width: 560px) {
+  .sk-wish { top: calc(84px + var(--safe-top)); max-width: calc(100vw - 124px); }
+}
+
+/* ---------------- 친구와 번갈아 쌓기 ---------------- */
+.mode-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 10px 0;
+  padding: 14px;
+  border: 2.5px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 4px 0 var(--line);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.mode-card:hover { background: #fff3d6; }
+.mode-card:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--line); }
+.mode-card:focus-visible { outline: 3px solid #6c9ef0; outline-offset: 2px; }
+.mode-card .ico { font-size: 32px; line-height: 1; }
+.mode-card b { display: block; font-family: 'Jua', sans-serif; font-weight: 400; font-size: 18px; }
+.mode-card small { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.friend-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 132px; margin: 6px 0; overflow-y: auto; }
+.friend-list.off { opacity: .5; pointer-events: none; }
+.friend-list p { margin: 0; }
+.friend-list .chip-btn:disabled { opacity: .55; cursor: default; }
+.invite-msg { min-height: 2.8em; margin: 6px 0 10px; font-size: 14px; line-height: 1.4; color: #b9671b; }
+.invite-msg + .row-btns .btn:disabled { opacity: .6; cursor: wait; }
+.sk-turn {
+  position: absolute;
+  top: calc(122px + var(--safe-top));
+  left: 50%;
+  z-index: 6;
+  padding: 6px 16px;
+  border: 2.5px solid var(--line);
+  border-radius: 999px;
+  background: #e9e4da;
+  box-shadow: 0 3px 0 var(--line);
+  font-family: 'Jua', sans-serif;
+  font-size: 16px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.sk-turn[hidden] { display: none; }
+.sk-turn.mine { background: #ffd27a; }
+#skFinish[hidden], #rsRetry[hidden] { display: none; }
+
 /* 처음 불러오는 동안 */
 .loading3d {
   position: fixed;
@@ -279,17 +403,15 @@ body.ui-folded:not(.stacking):not(.admin-on) :is(.hud, .zoom, .actionbar, .mode-
 
 /* =========================================================
  * 캠퍼스 지도 (js3d/mapui.js) — 미니맵 · 전체 지도 · 경계 안내
- *  PC: 미니맵 오른쪽 아래 / 좁은 화면(760px 이하): 오른쪽 위 · 가로:세로 = 4:3
+ *  미니맵은 왼쪽 위(.map-dock 안) · 가로:세로 = 4:3
  * ========================================================= */
-/* PC 미니맵 가로 크기: 기본 360px, 단 화면이 작으면
- *  - 가운데 아래 액션바(폭 약 390px)와 안 겹치게
- *  - 위로 올린 확대·회전 버튼이 오른쪽 위 칩과 안 겹치게 줄어들어요 */
-:root { --mm-w: min(360px, calc(50vw - 224px), calc((100vh - 320px) * 4 / 3)); }
+/* 미니맵 가로 크기: 기본 360px, 단 화면이 작으면
+ *  - 화면 가운데 캐릭터를 가리지 않게
+ *  - 왼쪽 가운데 'UI 접기' 버튼과 안 겹치게 줄어들어요 */
+:root { --mm-w: min(360px, calc(50vw - 224px), calc((50vh - 90px) * 4 / 3)); }
+@media (max-width: 760px) { :root { --mm-w: min(152px, calc((50vh - 90px) * 4 / 3)); } }
 .minimap {
-  position: fixed;
-  right: 12px;
-  bottom: calc(16px + var(--safe-bottom));
-  z-index: 10;
+  position: relative;
   width: var(--mm-w);
   height: calc(var(--mm-w) * 3 / 4);
   overflow: hidden;
@@ -344,10 +466,7 @@ body.ui-folded:not(.stacking):not(.admin-on) :is(.hud, .zoom, .actionbar, .mode-
   line-height: 16px;
 }
 .minimap-show {
-  position: fixed;
-  right: 12px;
-  bottom: calc(16px + var(--safe-bottom));
-  z-index: 10;
+  min-height: 42px;
   padding: 6px 12px;
   border: 2px solid var(--line);
   border-radius: 999px;
@@ -359,23 +478,19 @@ body.ui-folded:not(.stacking):not(.admin-on) :is(.hud, .zoom, .actionbar, .mode-
   cursor: pointer;
 }
 .minimap[hidden], .minimap-show[hidden], .fullmap[hidden] { display: none; }
-body.stacking .minimap, body.stacking .minimap-show, body.stacking .edge-notice { display: none; }
+body.stacking .edge-notice { display: none; }
 
-/* PC에서 미니맵이 펼쳐져 있으면 확대·회전 버튼을 미니맵 바로 위로 올려요 (접으면 원래 자리) */
+/* 관리자 모드(PC): 왼쪽은 관리자 패널 자리라서 미니맵을 오른쪽 아래로, 확대 버튼은 그 위로 */
 @media (min-width: 761px) {
-  body:not(.stacking):has(.minimap:not([hidden])) .zoom {
-    top: auto;
-    bottom: calc(16px + var(--safe-bottom) + var(--mm-w) * 3 / 4 + 16px);
-    transform: none;
-  }
+  body.admin-on .map-dock { left: auto; top: auto; right: 12px; bottom: calc(16px + var(--safe-bottom)); }
+  body.admin-on:has(.minimap:not([hidden])) .zoom { bottom: calc(16px + var(--safe-bottom) + var(--mm-w) * 3 / 4 + 16px); }
 }
 
 /* 터치 화면엔 M 키가 없으니 표시 안 함 */
 @media (hover: none) { .mm-key { display: none; } }
 
 @media (max-width: 760px) {
-  .minimap, .minimap-show { top: calc(84px + var(--safe-top)); bottom: auto; right: 8px; }
-  .minimap { width: 152px; height: 114px; border-radius: 14px; }
+  .minimap { border-radius: 14px; }
   .mm-fold { width: 22px; height: 22px; top: 4px; left: 4px; }
   .mm-key { display: none; }
 }
@@ -419,6 +534,21 @@ body.stacking .minimap, body.stacking .minimap-show, body.stacking .edge-notice 
   text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;  /* 지도 위에서도 잘 보이게 */
   cursor: pointer;
 }
+.fm-card canvas { cursor: pointer; }
+.fm-hint {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .18);
+  font-size: 13px;
+  color: #333;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
 .fm-legend {
   position: absolute;
   left: 22px;     /* 울타리 선 안쪽 잔디 위 */
@@ -451,6 +581,7 @@ body.stacking .minimap, body.stacking .minimap-show, body.stacking .edge-notice 
   .fm-card { width: 100%; height: 100%; aspect-ratio: auto; border: 0; border-radius: 0; box-shadow: none; }
   .fm-close { top: calc(8px + var(--safe-top)); right: 8px; }
   .fm-legend { display: none; }
+  .fm-hint { top: calc(12px + var(--safe-top)); font-size: 12.5px; }
 }
 
 /* 경계 안내 (캠퍼스 끝에 막혔을 때, 아이콘 없이 빨간 글씨만) */
@@ -588,30 +719,8 @@ body.admin-on .loc, body.admin-on #myCard, body.admin-on .chatbox { display: non
 #skTray .tray-btn.on { opacity: 1; }
 
 /* ---------------- 돌탑 인증샷 (폴라로이드) ---------------- */
-.photo-btn {
-  position: fixed;
-  left: 12px;
-  bottom: calc(86px + var(--safe-bottom));
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  width: 62px; height: 62px;
-  border: 2.5px solid var(--line);
-  border-radius: 16px;
-  background: #fffdf7;
-  box-shadow: 0 3px 0 var(--line);
-  color: var(--ink);
-  font-family: 'Jua', sans-serif;
-  cursor: pointer;
-  transform: rotate(-4deg);
-}
-.photo-btn .ico { font-size: 26px; line-height: 1; }
-.photo-btn .txt { font-size: 11.5px; }
-.photo-btn:hover { background: #fff3d6; }
-.photo-btn:active { transform: rotate(-4deg) translateY(2px); box-shadow: 0 1px 0 var(--line); }
+/* 모양은 확대·축소 버튼(.zoom button)과 같아요 */
+.zoom .photo-btn:hover { background: #fff3d6; }
 body.stacking .photo-btn, body.photo-open .photo-btn { display: none; }
 
 .photo-flash {

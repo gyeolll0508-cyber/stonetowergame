@@ -1,7 +1,7 @@
 /**
  * js/photo.js — 돌탑 인증샷 (폴라로이드)
  *
- *  - 화면 왼쪽 아래 📸 버튼을 누르면 찰칵! 지금 화면을 폴라로이드 사진으로 만들어요.
+ *  - 화면 오른쪽 아래 📷 버튼을 누르면 찰칵! 지금 화면을 폴라로이드 사진으로 만들어요.
  *  - 사진 아래에는 장소·날짜·닉네임(가까운 돌탑이 있으면 돌탑 정보)이 손글씨처럼 들어가요.
  *  - 💾 사진 저장: PNG 파일로 내려받아요 (폰에서 공유 기능이 있으면 📤 공유도 돼요).
  *  - 3D(Campus.snapshot)와 2D 지도(#campus 캔버스) 둘 다 동작해요.
@@ -22,8 +22,9 @@
     btn.type = 'button';
     btn.title = '돌탑 인증샷 찍기 (P)';
     btn.setAttribute('aria-label', '돌탑 인증샷 찍기');
-    btn.innerHTML = '<span class="ico">📸</span><span class="txt">인증샷</span>';
-    document.body.appendChild(btn);
+    btn.textContent = '📷';
+    // 음악 버튼 옆 칸에 넣어요
+    (document.querySelector('.zoom') || document.body).appendChild(btn);
 
     flash = document.createElement('div');
     flash.className = 'photo-flash';

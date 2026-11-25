@@ -2,14 +2,14 @@
  * js3d/mapui.js — 캠퍼스 지도 UI (2번 기능: 캠퍼스 지도 및 범위)
  *  - 미니맵: 화면 구석에 항상 떠 있는 "내 주변" 지도 (북쪽이 위)
  *            누르면 전체 지도가 열리고, 접기 버튼으로 숨길 수 있어요.
- *  - 전체 지도: M 키 또는 미니맵을 눌러 여는 "보기 전용" 지도예요.
- *            (지도를 눌러도 아무 일도 없어요. 세로 화면에선 옆으로 끌어서 봐요)
+ *  - 전체 지도: M 키 또는 미니맵을 눌러 열어요.
+ *            건물(이름)이나 원하는 곳을 누르면 바로 그리로 이동해요. (세로 화면에선 옆으로 끌어서 봐요)
  *  - 경계 안내: 캠퍼스 끝(생울타리)에 막히면 빨간 글씨로 알려 줘요.
  *
  *  좌표는 게임 좌표(px)를 그대로 써요. 캠퍼스 3000 × 2100px = 300m × 210m
  *  campus3d.js가 init(hooks)로 필요한 함수들을 넘겨주고, 매 프레임 frame()을 불러요.
  * ========================================================= */
-import * as L from './logic.js';
+import * as L from './logic.js?v=2026112501';
 
 const DATA = window.DATA;
 const Store = window.Store;
@@ -155,23 +155,28 @@ function drawTowers(ctx, towers, v, r) {
 
 // 건물·장소 이름표 (화면 좌표, 글자 크기 일정). 화면 밖으로 나가면 잘려 보여요.
 //  opt = { size, icon(건물 아이콘 붙이기), short(정문·돌탑 마당을 짧게) }
+//  돌려주는 값: 이름표 자리들 [{ place, x, y, w, h }] (화면 px, 누르기 판정용)
 function drawLabels(ctx, v, opt) {
   ctx.font = opt.size + "px 'Jua', sans-serif";
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const put = function (text, gx, gy, dy, color) {
+  const rects = [];
+  const put = function (place, text, gx, gy, dy, color) {
     const x = snap(v.ox + gx * v.s, v.dpr), y = snap(v.oy + gy * v.s + dy, v.dpr);
     if (x < -120 || y < -20 || x > v.w + 120 || y > v.h + 20) return;
     outlinedText(ctx, text, x, y, color);
+    const w = ctx.measureText(text).width;
+    rects.push({ place: place, x: x - w / 2, y: y - opt.size / 2, w: w, h: opt.size });
   };
   DATA.PLACES.forEach(function (p) {
     let text = p.name;
     if (p.type === 'building' && opt.icon) text = p.icon + ' ' + p.name;
     if (p.type === 'gate' && opt.short) text = '정문';      // 좁을 땐 짧게 (이름표 겹침 방지)
-    if (p.type === 'gate') put(text, p.x + p.w / 2, p.y, -6);
-    else put(text, p.x + p.w / 2, p.y + p.h / 2, 0);
+    if (p.type === 'gate') put(p, text, p.x + p.w / 2, p.y, -6);
+    else put(p, text, p.x + p.w / 2, p.y + p.h / 2, 0);
   });
-  put(opt.short ? '돌탑 마당' : L.PLAZA.name, L.PLAZA.x, L.PLAZA.y + L.PLAZA.r, 10, '#8a5a3c');
+  put(PLAZA_PLACE, opt.short ? '돌탑 마당' : L.PLAZA.name, L.PLAZA.x, L.PLAZA.y + L.PLAZA.r, 10, '#8a5a3c');
+  return rects;
 }
 
 // 나: 시야각 부채꼴(카메라 방향) + 화살표(캐릭터가 보는 방향). 화면 좌표.
@@ -236,7 +241,10 @@ function setFolded(v) {
 /* ---------------- 전체 지도 ---------------- */
 
 let fullPan = null;   // 세로 화면에서 지도를 옆으로 끌어 볼 때, 지도 왼쪽 끝의 화면 x
-let drag = null;      // 손가락(마우스)으로 끄는 중인 정보
+let drag = null;      // 누르고(끌고) 있는 손가락·마우스 정보
+let labelRects = [];  // 전체 지도 이름표 자리 (누르기 판정용)
+const PLAZA_PLACE = { type: 'plaza', name: L.PLAZA.name };
+const TAP_PX = 10;    // 이보다 많이 움직이면 누르기가 아니라 끌기
 
 // 지도 모달에 캠퍼스 바깥을 이만큼(게임 px)만 남겨요 → 모달 비율 = (3000+60) : (2100+60)
 //  (CSS .fm-card의 aspect-ratio와 같은 숫자여야 지도에 딱 맞아요)
@@ -271,22 +279,60 @@ function drawFull(st) {
   const big = s > 0.3;
   const v = { s: s, ox: ox, oy: oy, dpr: dpr, w: w, h: h };
   drawTowers(ctx, st.towers, v, big ? 4.5 : 3.8);
-  drawLabels(ctx, v, { size: big ? 14 : 10, icon: big, short: !big });
+  labelRects = drawLabels(ctx, v, { size: big ? 14 : 10, icon: big, short: !big });
   drawPlayer(ctx, ox + st.x * s, oy + st.y * s, st, big ? 10 : 8);
 }
 
-// 세로 화면(폰)에서 지도를 옆으로 끌어서 보기
+// 누르면 그곳으로 이동, 세로 화면(폰)에서 끌면 지도를 옆으로 보기
 function onFullDown(e) {
-  if (!fv.pan) return;
-  drag = { id: e.pointerId, x: e.clientX, pan: fullPan };
+  if (e.button > 0) return;
+  if (drag) { drag.moved = true; return; }   // 두 번째 손가락 → 누르기로 치지 않아요
+  drag = { id: e.pointerId, x: e.clientX, y: e.clientY, pan: fullPan, moved: false };
   try { fullCv.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
 }
 function onFullMove(e) {
   if (!drag || e.pointerId !== drag.id) return;
-  fullPan = drag.pan + (e.clientX - drag.x);  // 범위는 다음 그리기에서 맞춰요
+  if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > TAP_PX) drag.moved = true;
+  if (fv.pan && drag.moved) fullPan = drag.pan + (e.clientX - drag.x);  // 범위는 다음 그리기에서 맞춰요
 }
 function onFullUp(e) {
-  if (drag && e.pointerId === drag.id) drag = null;
+  if (!drag || e.pointerId !== drag.id) return;
+  const tap = !drag.moved;
+  drag = null;
+  if (!tap) return;
+  const r = fullCv.getBoundingClientRect();
+  goFromMap(e.clientX - r.left, e.clientY - r.top);
+}
+
+// 지도의 (mx, my)에 있는 장소: 이름표 → 건물·연못·운동장·정문·돌탑 마당 순서로 찾아요
+function placeAt(mx, my, x, y) {
+  const hit = labelRects.filter(function (q) { return mx > q.x - 6 && mx < q.x + q.w + 6 && my > q.y - 6 && my < q.y + q.h + 6; });
+  if (hit.length) {
+    // 이름표가 겹쳐 있으면 누른 자리와 가운데가 제일 가까운 것
+    hit.sort(function (a, b) {
+      return Math.hypot(a.x + a.w / 2 - mx, a.y + a.h / 2 - my) - Math.hypot(b.x + b.w / 2 - mx, b.y + b.h / 2 - my);
+    });
+    return hit[0].place;
+  }
+  const p = DATA.PLACES.find(function (q) { return q.type !== 'field' && x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h; });
+  return p || null;
+}
+
+// 그 장소 앞에 설 자리: 건물·연못은 남쪽 앞, 정문은 안쪽, 마당·운동장은 가운데
+function frontOf(p) {
+  if (p.type === 'plaza') return { x: L.PLAZA.x, y: L.PLAZA.y };
+  const cx = p.x + p.w / 2;
+  if (p.type === 'gate') return { x: cx, y: p.y - 60 };
+  if (p.type === 'field') return { x: cx, y: p.y + p.h / 2 };
+  return { x: cx, y: p.y + p.h + (p.type === 'pond' ? 22 : 40) };
+}
+
+function goFromMap(mx, my) {
+  const x = (mx - fv.ox) / fv.s, y = (my - fv.oy) / fv.s;
+  const p = placeAt(mx, my, x, y);
+  closeFull();
+  if (p) { const f = frontOf(p); hooks.goTo(f.x, f.y, p.name, p.type === 'building' || p.type === 'pond'); }
+  else hooks.goTo(x, y, '', false);
 }
 
 function openFull() {
@@ -329,6 +375,7 @@ function isTyping(e) {
  * hooks = {
  *   state()        → { x, y, heading, yaw, color, towers }
  *   canOpen()      → 지금 전체 지도를 열어도 되나? (모달·돌 쌓기 중이면 false)
+ *   goTo(x, y, name, north) → 그 자리(막혔으면 가까운 빈자리)로 이동. north면 북쪽(건물)을 바라봐요
  * }
  */
 export function init(h) {
@@ -367,7 +414,8 @@ export function init(h) {
   elFull.tabIndex = -1;
   elFull.innerHTML =
     '<div class="fm-card">' +
-      '<canvas aria-label="캠퍼스 전체 지도. 가고 싶은 곳을 누르면 걸어가고, 돌탑을 누르면 정보를 봐요."></canvas>' +
+      '<canvas aria-label="캠퍼스 전체 지도. 건물이나 가고 싶은 곳을 누르면 그곳으로 이동해요."></canvas>' +
+      '<div class="fm-hint">건물이나 원하는 곳을 누르면 바로 이동해요</div>' +
       '<button class="fm-close" type="button" aria-label="지도 닫기" title="닫기 (M)">✕</button>' +
       '<div class="fm-legend">' +
         '<span><svg class="fm-me" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 .8 11 11 6 8.2 1 11z"/></svg>나</span>' +
@@ -391,7 +439,10 @@ export function init(h) {
   elNotice.setAttribute('aria-live', 'polite');
   elNotice.textContent = '캠퍼스 밖으로는 나갈 수 없어요';
 
-  document.body.append(elMini, elShow, elFull, elNotice);
+  // 미니맵은 왼쪽 위 칸(#mapDock)의 도움말 버튼 앞에 넣어요
+  const dock = document.getElementById('mapDock');
+  (dock || document.body).prepend(elMini, elShow);
+  document.body.append(elFull, elNotice);
 
   let saved = false;
   try { saved = window.localStorage.getItem(FOLD_KEY) === '1'; } catch (e) { /* 무시 */ }

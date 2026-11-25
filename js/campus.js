@@ -733,7 +733,7 @@
         if (p.type === 'pond' && inPond(x, y, p, 40)) return { ok: false, reason: '연못과 너무 가까워요 🦆' };
         if ((p.type === 'building' || p.type === 'gate') && distToRect(x, y, p) < 34) return { ok: false, reason: p.name + '과(와) 너무 가까워요.' };
       }
-      const near = towers.find(function (t) { return t.id !== ignoreId && Math.hypot(t.x - x, t.y - y) < 80; });
+      const near = towers.find(function (t) { return t.id !== ignoreId && Math.hypot(t.x - x, t.y - y) < DATA.TOWER_GAP; });
       if (near) return { ok: false, reason: '‘' + near.name + '’님의 돌탑과 너무 가까워요.' };
       if (trees.some(function (t) { return Math.hypot(t.x - x, t.y - y) < 40; })) return { ok: false, reason: '나무 아래는 좁아요 🌳 조금만 옮겨 볼까요?' };
       return { ok: true };

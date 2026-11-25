@@ -13,9 +13,33 @@
     { id: 'long',   name: '긴돌',   w: 172, h: 24, mass: 1.4, top: 0.9,  bottom: 0.86, color: '#c6bca7', shape: 'slab',   tip: '넓지만 무거워요' },
     { id: 'pebble', name: '조약돌', w: 64,  h: 34, mass: 0.5, top: 0.55, bottom: 0.55, color: '#d3cabc', shape: 'oval',   tip: '작고 가벼워요' },
     { id: 'mong',   name: '몽돌',   w: 104, h: 46, mass: 1.0, top: 0.66, bottom: 0.66, color: '#9fa8aa', shape: 'oval',   tip: '매끈한 타원형' },
-    { id: 'round',  name: '둥근돌', w: 78,  h: 72, mass: 1.2, top: 0.28, bottom: 0.42, color: '#b6ab9c', shape: 'round',  tip: '위에 쌓기 어려워요' },
-    { id: 'pointy', name: '뾰족돌', w: 84,  h: 70, mass: 0.9, top: 0.12, bottom: 0.9,  color: '#a49e93', shape: 'pointy', tip: '꼭대기용 마무리 돌' }
+    { id: 'round',  name: '둥근돌', w: 78,  h: 72, mass: 1.2, top: 0.41, bottom: 0.42, color: '#b6ab9c', shape: 'round',  tip: '위에 쌓기 어려워요' },
+    { id: 'pointy', name: '뾰족돌', w: 84,  h: 70, mass: 0.9, top: 0.31, bottom: 0.9,  color: '#a49e93', shape: 'pointy', tip: '위에 쌓기 가장 어려워요' }
   ];
+
+  /* 층마다 나오는 돌 (그 층부터 나오기 시작하고, 위로는 계속 나와요)
+   *  - 1~7층 : 납작돌·네모돌·긴돌만 (납작돌이 제일 자주)
+   *  - 8층~  : 나올 수 있는 돌이 골고루 — 8층 몽돌, 10층 조약돌, 15층 둥근돌, 18층 뾰족돌 추가 */
+  const FROM = { flat: 1, block: 1, long: 1, mong: 8, pebble: 10, round: 15, pointy: 18 };
+  const LOW_MAX = 7;
+  const LOW_WEIGHTS = { flat: 60, block: 20, long: 20 };
+
+  function weightOf(id, floor) {
+    if (floor < FROM[id]) return 0;
+    return floor <= LOW_MAX ? LOW_WEIGHTS[id] : 1;
+  }
+
+  // floor층에 올릴 돌을 무작위로 골라요 (1층 = 받침돌 바로 위)
+  function pick(floor) {
+    const total = TYPES.reduce(function (s, t) { return s + weightOf(t.id, floor); }, 0);
+    let r = Math.random() * total;
+    for (let i = 0; i < TYPES.length; i++) {
+      const w = weightOf(TYPES[i].id, floor);
+      if (r < w) return TYPES[i].id;
+      r -= w;
+    }
+    return TYPES[0].id;
+  }
 
   function byId(id) {
     return TYPES.find(function (t) { return t.id === id; }) || TYPES[0];
@@ -179,6 +203,7 @@
   window.STONES = {
     TYPES: TYPES,
     byId: byId,
+    pick: pick,
     draw: draw,
     icon: icon,
     shade: shade,

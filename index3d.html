@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=2026112206">
-  <link rel="stylesheet" href="css/style3d.css?v=2026112302">
+  <link rel="stylesheet" href="css/style.css?v=2026112502">
+  <link rel="stylesheet" href="css/style3d.css?v=2026112507">
   <link rel="stylesheet" href="css/tower-mgmt.css?v=2026112401">
   <!-- Three.js를 인터넷(CDN)에서 불러와요. import 'three' → 아래 주소 -->
   <script type="importmap">
@@ -32,39 +32,43 @@
   <!-- 상단 HUD -->
   <header class="hud">
     <div class="hud-col">
-      <div class="brand">🪨 사이버 돌탑</div>
+      <button id="profileChip" class="chip profile-chip" type="button" title="이름·캐릭터 보기·바꾸기">
+        <span id="profileDot" class="dot"></span><span id="profileName" hidden>이름 없음</span><span>내 프로필 보기</span>
+      </button>
+    </div>
+    <div class="loc" id="locLabel">충북대학교 정문</div>
+    <div class="hud-col right">
       <button id="myCard" class="my-card" type="button" title="내 돌탑 정보">
         <div class="my-row"><span>내 최고</span><b id="myBest">-</b></div>
         <div class="gauge sm"><i id="myGaugeFill"></i></div>
         <small id="myGaugeLabel">돌탑을 쌓아 소원을 빌어요</small>
       </button>
-    </div>
-    <div class="loc" id="locLabel">충북대학교 정문</div>
-    <div class="hud-col right">
-      <button id="profileChip" class="chip" type="button" title="이름·캐릭터 바꾸기">
-        <span id="profileDot" class="dot"></span><span id="profileName">이름 없음</span>
-      </button>
-      <div id="netBadge" class="badge">연결 중…</div>
+      <!-- 저장에 문제가 있을 때(오프라인 등)만 보여요 -->
+      <div id="netBadge" class="badge" hidden></div>
       <div id="liveCount" class="badge live-count" title="지금 캠퍼스에 함께 접속해 있는 사람 수 (나 포함)" hidden></div>
       <button id="btnAccount" class="chip account-chip" type="button" hidden>🔐 기기 연결</button>
     </div>
   </header>
 
+  <!-- 왼쪽 위: 지도 + 도움말 (지도는 js3d/mapui.js가 이 안에 넣어요) -->
+  <div id="mapDock" class="map-dock">
+    <button id="btnHelp" class="help-btn" type="button" aria-label="도움말" title="도움말">?</button>
+  </div>
+
   <!-- UI 접기·펼치기 (모바일에서 화면을 넓게 보기) -->
   <button id="uiFold" class="ui-fold" type="button" aria-pressed="false" title="버튼·정보 접기 (H)">🙈 <span class="lbl">UI 접기</span></button>
 
   <div class="zoom">
-    <button id="zoomIn" type="button" aria-label="확대">＋</button>
-    <button id="zoomOut" type="button" aria-label="축소">－</button>
+    <button id="zoomIn" type="button" aria-label="확대" title="확대"><svg class="mag" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M15.4 15.4 21 21"/><path d="M10 7v6M7 10h6"/></svg></button>
+    <button id="zoomOut" type="button" aria-label="축소" title="축소"><svg class="mag" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M15.4 15.4 21 21"/><path d="M7 10h6"/></svg></button>
     <button id="campusBgm" class="bgm" type="button" data-bgm-toggle aria-pressed="true" aria-label="배경음악 켜기/끄기" title="배경음악 끄기 (M)">🎵</button>
   </div>
 
   <nav class="actionbar">
     <button id="btnBuild" class="btn primary" type="button">🪨 여기에 돌탑 쌓기</button>
     <button id="btnGoMine" class="btn go-mine" type="button" title="내 돌탑 앞으로 바로 이동 (M)" hidden>📍 <span class="lbl">내 돌탑으로 이동</span><span class="lbl-s">내 돌탑</span></button>
-    <button id="btnList" class="btn" type="button">📜 <span class="lbl">돌탑 </span>구경</button>
+    <button id="btnList" class="btn" type="button">🏆 <span class="lbl">돌탑 </span>순위</button>
     <button id="btnChat" class="btn icon" type="button" aria-label="말풍선 창 열기" title="말풍선 창 열기 (Enter) — 보낸 말은 내 머리 위에 5초 동안 떠요" hidden>💬<small id="chatUnread" aria-label="안 읽은 말풍선"></small></button>
-    <button id="btnHelp" class="btn icon" type="button" aria-label="도움말">?</button>
   </nav>
 
   <!-- 내 돌탑이 화면 밖에 있을 때 가장자리에 방향 표시 -->
@@ -77,7 +81,7 @@
       <b id="chatTitle">💬 말풍선</b>
       <button id="chatClose" class="chat-x" type="button" aria-label="말풍선 창 닫기">✕</button>
     </div>
-    <p class="chat-help">보낸 말은 <b>내 캐릭터 머리 위</b>에 5초 동안 떠서, 지금 접속한 사람들에게 보여요. 기록은 이 기기에만 최근 50개까지 남아요.</p>
+    <p class="chat-help">보낸 말은 <b>내 캐릭터 머리 위</b>에 5초 동안 떠서, 지금 접속한 사람들에게 보여요. 기록은 이 기기에만 최근 50개까지 남아요. 내가 한 말은 🗑️로 지울 수 있고, <b>지금 접속한 사람</b>의 기록에서도 지워져요.</p>
     <ol id="chatLog" class="chat-log" aria-live="polite"></ol>
     <form id="chatBar" class="chatbar" autocomplete="off">
       <input id="inChat" maxlength="40" placeholder="머리 위에 띄울 말 (Enter로 보내기)" enterkeyhint="send">
@@ -103,8 +107,8 @@
           </span>
         </label>
         <div class="field">
-          <span>캐릭터 색</span>
-          <div id="colorPick" class="swatches"></div>
+          <span>옷 색</span>
+          <div id="colorPick"></div>
         </div>
       </div>
       <!-- 캐릭터 꾸미기 (처음 입장 + 닉네임 눌렀을 때 같은 창) -->
@@ -136,21 +140,63 @@
     </div>
   </div>
 
+  <!-- 쌓는 방법 고르기 -->
+  <div id="mMode" class="layer modal" role="dialog" aria-labelledby="modeTitle">
+    <h2 id="modeTitle">어떻게 쌓을까요?</h2>
+    <button id="btnModeSolo" class="mode-card" type="button">
+      <span class="ico">🪨</span><span><b>직접 쌓기</b><small>나 혼자 차근차근 쌓아요</small></span>
+    </button>
+    <button id="btnModeHelp" class="mode-card" type="button">
+      <span class="ico">🤝</span><span><b>친구에게 도움 요청하기</b><small>접속한 친구와 한 층씩 번갈아 쌓아요. 돌탑과 기록은 내 것이에요</small></span>
+    </button>
+    <button id="btnModeCancel" class="btn wide" type="button">취소</button>
+  </div>
+
+  <!-- 친구에게 도움 요청하기 -->
+  <div id="mInvite" class="layer modal" role="dialog" aria-labelledby="inviteTitle">
+    <h2 id="inviteTitle">🤝 누구에게 부탁할까요?</h2>
+    <label class="field">
+      <span>친구 닉네임</span>
+      <input id="inFriend" maxlength="10" placeholder="지금 접속해 있는 친구의 닉네임" autocomplete="off" enterkeyhint="send">
+    </label>
+    <p class="muted small">지금 접속해 있는 사람</p>
+    <div id="friendList" class="friend-list"></div>
+    <p id="inviteMsg" class="invite-msg" role="status" aria-live="polite"></p>
+    <div class="row-btns">
+      <button id="btnInviteCancel" class="btn" type="button">뒤로</button>
+      <button id="btnInviteOk" class="btn primary" type="button">🤝 요청 보내기</button>
+    </div>
+  </div>
+
+  <!-- 도움 요청을 받았을 때 -->
+  <div id="mHelpAsk" class="layer modal" role="dialog" aria-labelledby="helpAskTitle">
+    <div class="modal-hero">🪨🤝🪨</div>
+    <h2 id="helpAskTitle">함께 쌓아 줄래요?</h2>
+    <p class="sub"><b id="helpAskName"></b>님이 돌탑 쌓기를 도와 달래요!<br><span id="helpAskWish"></span></p>
+    <p class="muted small">수락하면 친구 곁으로 이동해서 한 층씩 번갈아 쌓아요. 돌탑과 기록은 부탁한 친구 것이에요.</p>
+    <div class="row-btns">
+      <button id="btnHelpNo" class="btn" type="button">지금은 어려워요</button>
+      <button id="btnHelpYes" class="btn primary" type="button">🤝 도와주기</button>
+    </div>
+  </div>
+
   <!-- 도움말 -->
   <div id="mHelp" class="layer modal" role="dialog" aria-labelledby="helpTitle">
     <h2 id="helpTitle">이렇게 놀아요</h2>
     <ol class="help">
       <li><b>이동</b> — 땅을 탭(클릭)하면 그곳으로 걸어가요. 키보드는 <kbd>WASD</kbd>/<kbd>방향키</kbd>(보는 방향 기준).</li>
-      <li><b>인증샷</b> — 왼쪽 아래 📸 버튼(<kbd>P</kbd>)을 누르면 지금 화면이 폴라로이드 사진이 돼요. 💾 사진 저장으로 내려받을 수 있어요.</li>
+      <li><b>지도</b> — 왼쪽 위 지도를 누르면 크게 열려요. <b>건물 이름이나 원하는 곳</b>을 누르면 바로 그곳으로 이동해요.</li>
+      <li><b>인증샷</b> — 오른쪽 아래 📷 버튼(<kbd>P</kbd>)을 누르면 지금 화면이 폴라로이드 사진이 돼요. 💾 사진 저장으로 내려받을 수 있어요.</li>
       <li><b>시점</b> — <kbd>Q</kbd>/<kbd>E</kbd>로 좌우 360° 돌리고, <kbd>R</kbd>/<kbd>F</kbd>로 위아래로 기울여요. 화면을 마우스나 손가락으로 <b>끌면</b> 시점이 돌아가고, 두 손가락으로 벌리면 확대돼요.</li>
       <li><b>돌탑 세우기</b> — 발밑 링이 <b style="color:#2f9a55">초록색</b>인 잔디밭에서 <b>여기에 돌탑 쌓기</b>를 누르고 소원을 적어요. 중앙도서관 남쪽 <b>소원 돌탑 마당</b>을 추천해요! (한 사람당 돌탑 1개)</li>
-      <li><b>돌 쌓기</b> — 돌 모양은 매번 <b>무작위</b>로 바뀌어요. 위에서 움직이는 돌을 <b>탭</b>해서 떨어뜨려요. (<kbd>Space</kbd>)</li>
+      <li><b>돌 쌓기</b> — 돌 모양은 매번 <b>무작위</b>로 바뀌어요. 7층까지는 납작돌·네모돌·긴돌만 나오고, 8층부터 몽돌, 10층부터 조약돌, 15층부터 둥근돌, 18층부터 뾰족돌도 나와요. 위에서 움직이는 돌을 <b>탭</b>해서 떨어뜨려요. (<kbd>Space</kbd>)</li>
+      <li><b>함께 쌓기</b> — 쌓으러 갈 때 <b>친구에게 도움 요청하기</b>를 고르고 지금 접속해 있는 친구 닉네임을 적으면, 친구가 내 곁으로 와서 한 층씩 번갈아 쌓을 수 있어요. 돌탑과 기록은 부탁한 사람 것이에요.</li>
       <li><b>균형</b> — 위에 올린 돌들의 무게중심이 아랫돌 위를 벗어나면 와르르! 둥근돌·뾰족돌은 그 위에 쌓기 어려워요.</li>
       <li><b>난이도</b> — 높아질수록 돌이 빨라지고, 4층부터 바람, 12층부터 손떨림이 생겨요.</li>
       <li><b>기록</b> — 최고 기록이 캠퍼스의 내 돌탑이 되고, <b>15층</b>이면 소원 기원 게이지 100%!</li>
       <li><b>내 돌탑 찾기</b> — 내 돌탑이 화면 밖에 있으면 가장자리의 ⭐ 화살표가 방향과 거리를 알려 줘요. 아래 <b>📍 내 돌탑으로 이동</b>(<kbd>M</kbd>)을 누르면 바로 앞으로 이동해요.</li>
       <li><b>응원</b> — 다른 사람의 돌탑을 눌러 소원을 보고 ♥ 좋아요와 응원 한마디를 남겨요.</li>
-      <li><b>말풍선</b> — 지금 접속한 친구들이 캠퍼스에 함께 보여요. 💬 버튼(또는 <kbd>Enter</kbd>)으로 말하면 내 머리 위에 5초 동안 말풍선이 떠요. 오른쪽 위 👥는 지금 접속한 사람 수예요. 주고받은 말은 💬 창에 이 기기에만 기록돼요.</li>
+      <li><b>말풍선</b> — 지금 접속한 친구들이 캠퍼스에 함께 보여요. 돌탑을 쌓는 친구는 열심히 돌을 쌓는 모습으로 보여요. 💬 버튼(또는 <kbd>Enter</kbd>)으로 말하면 내 머리 위에 5초 동안 말풍선이 떠요. 오른쪽 위 👥는 지금 접속한 사람 수예요. 주고받은 말은 💬 창에 이 기기에만 기록돼요.</li>
       <li><b>UI 접기</b> — 왼쪽의 🙈 버튼(또는 <kbd>H</kbd>)으로 버튼·정보를 접어 캠퍼스를 넓게 볼 수 있어요.</li>
     </ol>
     <button id="btnHelpClose" class="btn primary wide" type="button">알겠어요!</button>
@@ -239,7 +285,7 @@
   <aside id="sList" class="layer sheet" aria-labelledby="listTitle">
     <div class="sheet-grab"></div>
     <button class="sheet-close" data-close type="button" aria-label="닫기">✕</button>
-    <h2 id="listTitle">📜 캠퍼스 돌탑</h2>
+    <h2 id="listTitle">🏆 돌탑 순위</h2>
     <p id="listSummary" class="muted small"></p>
     <div id="listTabs" class="tabs">
       <button data-sort="height" class="on" type="button">🏆 높이순</button>
@@ -263,6 +309,7 @@
       </div>
     </div>
     <div id="skWish" class="sk-wish"></div>
+    <div id="skTurn" class="sk-turn" role="status" aria-live="polite" hidden></div>
     <button id="skBgm" class="bgm-btn" data-bgm-toggle type="button" aria-pressed="true" aria-label="배경음악 켜기/끄기" title="배경음악 끄기 (M)">🎵</button>
     <div id="skTip" class="sk-tip">화면을 탭하면 돌이 떨어져요 👇</div>
     <div id="skBottom" class="stack-bottom">
@@ -306,16 +353,18 @@
     </div>
   </section>
 
-  <script src="js/data.js?v=2026112206"></script>
-  <script src="js/stones.js?v=2026112206"></script>
+  <script src="js/data.js?v=2026112504"></script>
+  <script src="js/stones.js?v=2026112503"></script>
   <script src="js/avatar.js?v=2026112206"></script>
   <!-- 온라인 공유(Supabase): 라이브러리 + 연결 정보. 불러오지 못하면 브라우저 저장만 사용 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
   <script src="js/supabase-config.js?v=2026112206"></script>
   <script src="js/store.js?v=2026112401"></script>
-  <script src="js/live.js?v=2026112301"></script>
+  <script src="js/live.js?v=2026112506"></script>
+  <!-- 친구와 번갈아 돌 쌓기 -->
+  <script src="js/coop.js?v=2026112502"></script>
   <!-- 돌탑 인증샷(폴라로이드) 찍기·저장 -->
-  <script src="js/photo.js?v=2026112301"></script>
+  <script src="js/photo.js?v=2026112501"></script>
   <!-- 관리자 모드에서 저장한 건물 배치 불러오기 (index3d.html?admin 으로 열면 관리자 버튼이 보여요) -->
   <script src="js/layout-data.js?v=2026112301"></script>
   <script src="js/layout.js?v=2026112206"></script>
@@ -352,7 +401,7 @@
         ? Promise.reject(new Error('file'))
         // 서버에 저장된 배치(맵 크기 포함)를 먼저 받아 와요 — 3D 파일들이 불러올 때 맵 크기를 읽어서 (늦으면 2.5초 뒤 지난번 배치로)
         : (window.Layout ? Layout.ready(2500) : Promise.resolve()).then(function () {
-            return Promise.all([import('./js3d/campus3d.js?v=2026112303'), import('./js3d/stack3d.js?v=2026112301')]);
+            return Promise.all([import('./js3d/campus3d.js?v=2026112510'), import('./js3d/stack3d.js?v=2026112506')]);
           }).then(function (mods) {
             mods[0].prepare(document.getElementById('campus'));
           });
@@ -367,12 +416,12 @@
         // 이미 2D로 보이고 있으니 "2D로 보기" 버튼은 숨겨요
         document.querySelectorAll('.mode-link').forEach(function (a) { a.hidden = true; });
         document.querySelectorAll('[data-bgm-toggle]').forEach(function (b) { b.hidden = true; });
-        return load('js/campus.js?v=2026112206').then(function () { return load('js/stack.js?v=2026112206'); });
+        return load('js/campus.js?v=2026112501').then(function () { return load('js/stack.js?v=2026112206'); });
       }).then(function () {
         // 서버에 저장된 건물 배치를 먼저 받아 와요 (늦으면 2.5초 뒤 지난번 배치로 시작)
         return window.Layout ? Layout.ready(2500) : null;
       }).then(function () {
-        return load('js/main.js?v=2026112402');
+        return load('js/main.js?v=2026112508');
       }).then(function () {
         hideLoading();
         if (reason === 'file') App.toast('3D는 로컬 서버로 열어야 보여요. 지금은 2D 지도예요 🗺️');

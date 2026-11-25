@@ -40,10 +40,18 @@
   function closeLayers() {
     // 프로필이 없으면 첫 화면은 닫을 수 없어요
     if (!Store.getProfile() && $('mWelcome').classList.contains('open')) return;
+    dropAsk();
     document.querySelectorAll('.layer.open').forEach(function (l) { l.classList.remove('open'); });
     $('backdrop').classList.remove('show');
     currentTowerId = null;
     Campus.highlight(null);
+  }
+
+  // 도움 요청 창을 닫으면 요청도 취소(또는 거절)돼요
+  function dropAsk() {
+    if (!window.Coop) return;
+    if (Coop.inviting()) Coop.cancelInvite();
+    if (Coop.asked()) Coop.answer(false);
   }
 
   function anyLayerOpen() { return !!document.querySelector('.layer.open'); }
@@ -98,6 +106,7 @@
       b.className = 'badge warn';
       b.title = '이 브라우저에서는 저장을 할 수 없어 새로고침하면 기록이 사라져요.';
     }
+    b.hidden = online === 'online' || online === 'connecting';   // 잘 연결됐으면 안 보여요
   }
 
   /* ---------------- 처음 방문(프로필) ---------------- */
@@ -105,15 +114,25 @@
   function buildSwatches() {
     const box = $('colorPick');
     box.innerHTML = '';
-    DATA.COLORS.forEach(function (c) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'swatch';
-      b.style.background = c;
-      b.dataset.color = c;
-      b.setAttribute('aria-label', '캐릭터 색 ' + c);
-      b.addEventListener('click', function () { pickColor(c); });
-      box.appendChild(b);
+    DATA.COLOR_GROUPS.forEach(function (g) {
+      const label = document.createElement('div');
+      label.className = 'swatch-label';
+      label.textContent = g.label;
+      const row = document.createElement('div');
+      row.className = 'swatches sm';
+      g.colors.forEach(function (c) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'swatch';
+        b.style.background = c[0];
+        b.dataset.color = c[0];
+        b.title = c[1];
+        b.setAttribute('aria-label', '옷 색 ' + c[1]);
+        b.addEventListener('click', function () { pickColor(c[0]); });
+        row.appendChild(b);
+      });
+      box.appendChild(label);
+      box.appendChild(row);
     });
   }
 
@@ -202,9 +221,42 @@
     setTimeout(function () { $('inName').focus(); }, 100);
   }
 
+  /* ---- 중복 이름 막기 ----
+   *  띄어쓰기·대소문자만 다른 이름도 같은 이름으로 봐요.
+   *  비교 대상: 다른 사람의 돌탑 이름 + (online이면) 지금 접속해 있는 사람 이름 */
+  function nameKey(s) {
+    return String(s || '').normalize('NFC').replace(/[\s\u200B-\u200D\u2060\u3164\uFEFF]+/g, '').toLowerCase();
+  }
+  function nameTaken(name, online) {
+    const k = nameKey(name);
+    if (Store.towers().some(function (t) { return !Store.isMine(t.id) && nameKey(t.name) === k; })) return true;
+    return !!online && !!window.Live && Live.names().some(function (n) { return nameKey(n) === k; });
+  }
+  // 아무도 안 쓰는 랜덤 닉네임
+  function freeNickname() {
+    for (let i = 0; i < 60; i++) {
+      const n = DATA.randomNickname();
+      if (!nameTaken(n, true)) return n;
+    }
+    for (let i = 2; ; i++) {
+      const n = DATA.randomNickname().slice(0, 10 - String(i).length) + i;
+      if (!nameTaken(n, true)) return n;
+    }
+  }
+  // 처음 받은 랜덤 닉네임이 서버 목록을 받아 보니 이미 있는 이름이면 다른 걸로 바꿔요
+  function fixAutoName() {
+    const p = Store.getProfile();
+    if (!welcomeFirst || !p || Store.myTower() || !nameTaken(p.name, false)) return;
+    const typed = $('inName').value.trim() !== p.name;   // 이미 직접 고쳐 쓰는 중이면 입력칸은 그대로 둬요
+    const n = freeNickname();
+    Store.setProfile(n, p.color, p);
+    Campus.setPlayer(n, p.color, p);
+    if (!typed) $('inName').value = n;
+  }
+
   // 🎲 버튼: 닉네임과 색을 새로 뽑아요 (저장은 '저장하기'를 눌러야)
   function rerollProfile() {
-    $('inName').value = DATA.randomNickname();
+    $('inName').value = freeNickname();
     pickColor(DATA.randomColor(profileColor));
   }
 
@@ -213,17 +265,25 @@
   function ensureProfile() {
     let p = Store.getProfile();
     if (p && p.name && p.color) return { profile: p, created: false };
-    Store.setProfile(DATA.randomNickname(), DATA.randomColor(), DATA.randomLook());
+    Store.setProfile(freeNickname(), DATA.randomColor(), DATA.randomLook());
     return { profile: Store.getProfile(), created: true };
   }
 
   function submitWelcome() {
-    const name = $('inName').value.trim().replace(/\s+/g, ' ');
-    if (!name) { toast('닉네임을 입력해 주세요 🙂'); $('inName').focus(); return; }
+    const name = $('inName').value.trim().replace(/\s+/g, ' ').slice(0, 10).trim();
+    if (!nameKey(name)) { toast('닉네임을 입력해 주세요 🙂'); $('inName').focus(); return; }
+    // 이름을 안 바꾸고 색·꾸미기만 저장하는 건, 이미 그 이름으로 세운 돌탑이 있으면 그대로 돼요
+    const cur = Store.getProfile();
+    const same = !!cur && nameKey(cur.name) === nameKey(name);
+    if (!(same && Store.myTower()) && nameTaken(name, !same)) {
+      toast('‘' + name + '’은(는) 이미 다른 사람이 쓰는 이름이에요. 다른 이름으로 해 주세요 🙏');
+      $('inName').focus(); $('inName').select();
+      return;
+    }
     const first = welcomeFirst;
     welcomeFirst = false;
-    Store.setProfile(name.slice(0, 10), profileColor, profileLook);
-    Campus.setPlayer(name.slice(0, 10), profileColor, profileLook);
+    Store.setProfile(name, profileColor, profileLook);
+    Campus.setPlayer(name, profileColor, profileLook);
     refreshHud();
     closeLayers();
     toast(first ? name + '님, 환영해요! 마음에 드는 잔디밭을 찾아가 보세요 🌿' : '프로필을 바꿨어요');
@@ -287,36 +347,191 @@
     }
     const check = Campus.canBuildHere();
     if (!check.ok) { closeLayers(); toast(check.reason); return; }
+    if (!Store.myTower() && nameTaken(Store.getProfile() && Store.getProfile().name, false)) { closeLayers(); askNewName(); return; }
     if (Store.myTower()) { closeLayers(); refreshHud(); toast('돌탑은 한 사람당 1개만 세울 수 있어요 🪨'); return; }
     const p = Campus.getPlayer();
-    const t = Store.createTower({ x: p.x, y: p.y, cat: wishCat, wish: wish });
-    if (!t) { closeLayers(); refreshHud(); toast('돌탑은 한 사람당 1개만 세울 수 있어요 🪨'); return; }
-    refreshHud();
-    closeLayers();
-    startStacking(t);
+    // 돌탑은 쌓는 방법까지 고른 다음에 세워요
+    const o = { x: p.x, y: p.y, cat: wishCat, wish: wish };
+    chooseMode(wish, function () {
+      const t = Store.createTower(o);
+      if (!t) { closeLayers(); toast('돌탑은 한 사람당 1개만 세울 수 있어요 🪨'); }
+      refreshHud();
+      return t;
+    });
+  }
+
+  /* ---------------- 쌓는 방법: 직접 / 친구에게 도움 요청 ---------------- */
+
+  let plan = null, planTitle = '';   // plan() → 쌓을 내 돌탑
+
+  // 친구와 함께 쌓기를 쓸 수 없는 화면(2D·실시간 꺼짐)이면 바로 혼자 쌓아요
+  function chooseMode(title, fn) {
+    plan = fn;
+    planTitle = title;
+    if (!$('mMode') || !liveOn || !window.Coop || !Stack.canCoop) { soloStart(); return; }
+    openLayer('mMode');
+    setTimeout(function () { $('btnModeSolo').focus(); }, 100);
+  }
+
+  function soloStart() {
+    const t = plan && plan();
+    plan = null;
+    if (t) startStacking(t);
+  }
+
+  function restack(mine) { chooseMode(mine.wish, function () { return Store.myTower(); }); }
+
+  function openInvite() {
+    $('inFriend').value = '';
+    setInviteWait(false);
+    $('inviteMsg').textContent = '';
+    renderFriends();
+    openLayer('mInvite');
+    setTimeout(function () { $('inFriend').focus(); }, 100);
+  }
+
+  // 지금 접속해 있는 친구 목록 (누르면 닉네임이 채워져요)
+  function renderFriends() {
+    const box = $('friendList');
+    box.innerHTML = '';
+    const list = Live.people();
+    if (!list.length) {
+      const p = document.createElement('p');
+      p.className = 'muted small';
+      p.textContent = '지금 접속해 있는 다른 사람이 없어요. 친구에게 게임을 켜 달라고 해 보세요!';
+      box.appendChild(p);
+      return;
+    }
+    list.forEach(function (f) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip-btn';
+      b.textContent = f.name + (f.busy ? ' · 🪨 쌓는 중' : '');
+      b.disabled = f.busy;
+      b.addEventListener('click', function () { $('inFriend').value = f.name; $('inviteMsg').textContent = ''; });
+      box.appendChild(b);
+    });
+  }
+
+  function setInviteWait(on) {
+    $('inFriend').disabled = on;
+    $('btnInviteOk').disabled = on;
+    $('btnInviteOk').textContent = on ? '기다리는 중…' : '🤝 요청 보내기';
+    $('friendList').classList.toggle('off', on);
+    $('btnInviteCancel').textContent = on ? '요청 취소' : '뒤로';
+  }
+
+  function sendInvite() {
+    if (Coop.inviting()) return;
+    const msg = function (s) { $('inviteMsg').textContent = s; };
+    const name = $('inFriend').value;
+    const k = nameKey(name);
+    if (!k) { msg('친구 닉네임을 입력해 주세요 🙂'); $('inFriend').focus(); return; }
+    if (!Live.isOnline()) { msg('아직 연결 중이에요. 잠시 후 다시 해 주세요'); return; }
+    const found = Live.people().filter(function (f) { return nameKey(f.name) === k; });
+    if (!found.length) {
+      const me = Store.getProfile();
+      msg(me && nameKey(me.name) === k ? '내 닉네임이에요. 친구 닉네임을 입력해 주세요 🙂' : '‘' + name.trim() + '’님은 지금 접속해 있지 않아요. 닉네임을 다시 확인해 주세요');
+      renderFriends();
+      return;
+    }
+    if (found.length > 1) { msg('같은 닉네임인 사람이 여러 명 접속해 있어요. 친구에게 닉네임을 바꿔 달라고 해 주세요'); return; }
+    if (found[0].busy) { msg(found[0].name + '님은 지금 돌을 쌓는 중이에요. 잠시 후 다시 요청해 주세요'); return; }
+    if (!Coop.invite(found[0].id, found[0].name, planTitle, function () { const t = plan && plan(); plan = null; return t; })) {
+      msg('지금은 요청을 보낼 수 없어요. 잠시 후 다시 해 주세요');
+      return;
+    }
+    setInviteWait(true);
+    msg(found[0].name + '님에게 물어보고 있어요… (30초 안에 답이 없으면 취소돼요)');
+  }
+
+  function setupCoop() {
+    if (!window.Coop || !$('mMode') || !Stack.canCoop) return;
+    Coop.init({
+      // 요청을 받을 수 없는 상태
+      busy: function () {
+        return Stack.isActive() || document.body.classList.contains('photo-open') || document.body.classList.contains('admin-on') ||
+          ['mWelcome', 'mWish', 'mMode', 'mInvite', 'mAccount', 'mDelTower'].some(function (id) { return $(id) && $(id).classList.contains('open'); });
+      },
+      onAsk: function (name, title) {
+        $('helpAskName').textContent = name;
+        $('helpAskWish').textContent = title ? '“' + title + '”' : '';
+        $('btnHelpYes').disabled = false;
+        $('btnHelpYes').textContent = '🤝 도와주기';
+        openLayer('mHelpAsk');
+      },
+      onAskGone: function (why, name) {
+        $('mHelpAsk').classList.remove('open');
+        if (!anyLayerOpen()) $('backdrop').classList.remove('show');
+        toast(why === 'nogo' ? name + '님과 연결하지 못했어요. 다시 요청해 달라고 해 보세요' : name + '님의 도움 요청이 취소됐어요');
+      },
+      onInviteEnd: function (why, name) {
+        setInviteWait(false);
+        renderFriends();
+        $('inviteMsg').textContent = why === 'no' ? name + '님이 지금은 어렵대요 😢 다른 친구에게 부탁해 볼까요?'
+          : why === 'busy' ? name + '님은 지금 다른 걸 하는 중이에요. 잠시 후 다시 요청해 주세요'
+            : name + '님이 답하지 않았어요. 다른 친구에게 부탁해 볼까요?';
+      },
+      where: function () {
+        const s = Campus.getPlayerState();
+        return { x: Math.round(s.x), y: Math.round(s.y), h: Math.round(s.h * 100) / 100 };
+      },
+      start: function (t, net) {
+        // 도와주러 온 친구는 부른 사람의 돌탑 맞은편으로 이동해요
+        if (!net.host && net.at && Campus.joinBeside) {
+          Campus.joinBeside(net.at);
+          toast('🏃 ' + net.partner + '님 곁으로 이동했어요');
+        }
+        startStacking(t, net);
+      }
+    });
+    $('btnModeSolo').addEventListener('click', soloStart);
+    $('btnModeHelp').addEventListener('click', openInvite);
+    $('btnModeCancel').addEventListener('click', function () { plan = null; closeLayers(); });
+    $('btnInviteOk').addEventListener('click', sendInvite);
+    $('inFriend').addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); sendInvite(); } });
+    $('btnInviteCancel').addEventListener('click', function () {
+      if (Coop.inviting()) { Coop.cancelInvite(); setInviteWait(false); $('inviteMsg').textContent = '요청을 취소했어요'; renderFriends(); }
+      else openLayer('mMode');
+    });
+    $('btnHelpYes').addEventListener('click', function () {
+      this.disabled = true;
+      this.textContent = '연결하는 중…';
+      Coop.answer(true);
+    });
+    $('btnHelpNo').addEventListener('click', closeLayers);
   }
 
   /* ---------------- 돌 쌓기 ---------------- */
 
-  function startStacking(t) {
+  // net: 친구와 함께 쌓을 때만 (coop.js)
+  function startStacking(t, net) {
     closeLayers();
     Campus.pause();
     Stack.start(t, function (info) {
       Campus.resume();
       refreshHud();
+      if (info && info.helped) return;   // 도와주러 간 거라 내 기록은 그대로예요
       Campus.highlight(t.id);
       if (info && info.height > 0) toast(info.isRecord ? '🏆 새 최고 기록 ' + info.height + '층 저장!' : '이번 기록 ' + info.height + '층 (최고 ' + Store.getTower(t.id).best + '층)');
       setTimeout(function () { Campus.highlight(null); }, 2500);
-    });
+    }, net);
   }
 
   function onBuild() {
     if (!Store.getProfile()) { openWelcome(); return; }
     const mine = Store.myTower();
-    if (mine) { startStacking(mine); return; }
+    if (mine) { restack(mine); return; }
     const check = Campus.canBuildHere();
     if (!check.ok) { toast(check.reason); return; }
+    if (nameTaken(Store.getProfile().name, false)) { askNewName(); return; }
     openWish('create');
+  }
+
+  // 돌탑을 세우려는데 내 이름과 같은 이름의 돌탑이 이미 있을 때
+  function askNewName() {
+    openWelcome();
+    toast('같은 이름의 돌탑이 이미 있어요. 이름을 바꾼 뒤 쌓아 주세요 🙏');
   }
 
   /* ---------------- 내 돌탑 위치 ---------------- */
@@ -360,7 +575,11 @@
     let dx = pos.x - cx, dy = pos.y - cy;
     if (Math.abs(dx) + Math.abs(dy) < 1) dy = 1;
     const k = Math.min((right - cx) / Math.max(Math.abs(dx), 1e-6), (bottom - cy) / Math.max(Math.abs(dy), 1e-6));
-    const x = cx + dx * k, y = cy + dy * k;
+    const x = cx + dx * k;
+    let y = cy + dy * k;
+    // 왼쪽 위 지도에 가려지면 지도 바로 아래로 내려요
+    const dock = $('mapDock') && $('mapDock').getBoundingClientRect();
+    if (dock && x - 70 < dock.right && y - 18 < dock.bottom) y = Math.min(bottom, dock.bottom + 24);
     const ang = Math.atan2(dy, dx);
     if (el.hidden) el.hidden = false;
     el.style.transform = 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) translate(-50%,-50%)';
@@ -670,6 +889,7 @@
 
   function chatItem(e) {
     const li = document.createElement('li');
+    li.chatEntry = e;
     if (e.me) li.className = 'me';
     const who = document.createElement('b');
     who.textContent = e.me ? '나' : e.name;
@@ -678,19 +898,37 @@
     const tm = document.createElement('time');
     tm.textContent = chatTime(e.at);
     li.appendChild(who); li.appendChild(txt); li.appendChild(tm);
+    if (e.me) {
+      // 내가 한 말만 지울 수 있어요 (지금 접속한 사람들의 기록에서도 지워져요)
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'chat-del';
+      del.textContent = '🗑️';
+      del.title = '이 말 지우기';
+      del.setAttribute('aria-label', '내가 한 말 지우기: ' + e.text);
+      del.addEventListener('click', function () {
+        const r = Live.removeLog(e);   // 화면에서는 onUnlog가 지워요
+        if (r) toast(r === 'all' ? '지웠어요 🗑️ 지금 접속한 사람들 기록에서도 지워져요' : '내 기록에서만 지웠어요 🗑️');
+      });
+      // Enter 단축키(말풍선 열기)보다 버튼 누르기가 먼저예요
+      del.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') ev.stopPropagation(); });
+      li.appendChild(del);
+    }
     return li;
+  }
+
+  function showChatEmpty() {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = '아직 주고받은 말이 없어요. 첫 인사를 건네 보세요 👋';
+    $('chatLog').appendChild(li);
   }
 
   function renderChatLog() {
     const ol = $('chatLog');
     ol.innerHTML = '';
     const list = Live.log();
-    if (!list.length) {
-      const li = document.createElement('li');
-      li.className = 'empty';
-      li.textContent = '아직 주고받은 말이 없어요. 첫 인사를 건네 보세요 👋';
-      ol.appendChild(li);
-    }
+    if (!list.length) showChatEmpty();
     list.forEach(function (e) { ol.appendChild(chatItem(e)); });
     ol.scrollTop = ol.scrollHeight;
   }
@@ -707,6 +945,18 @@
       onPeer: Campus.upsertPeer,
       onLeave: Campus.removePeer,
       onSay: Campus.showBubble,
+      onUnsay: Campus.hideBubble,
+      onCoop: function (m) { if (window.Coop) Coop.recv(m); },
+      onUnlog: function (e, newer) {
+        if (!$('chatBox').hidden) {
+          const ol = $('chatLog');
+          const li = Array.prototype.find.call(ol.children, function (x) { return x.chatEntry === e; });
+          if (li) li.remove();
+          if (!ol.children.length) showChatEmpty();
+        } else if (!e.me && newer < unread) {
+          setUnread(unread - 1);   // 아직 안 읽은 말이 지워졌어요
+        }
+      },
       onCount: updateLiveCount,
       onStatus: updateLiveCount,
       onLog: function (e) {
@@ -725,6 +975,7 @@
     $('btnChat').hidden = !liveOn;
     updateLiveCount();
     if (!liveOn) return;
+    setupCoop();
     $('btnChat').addEventListener('click', function () {
       if ($('chatBox').hidden) openChat(); else closeChat();
     });
@@ -817,7 +1068,7 @@
     $('cheerForm').addEventListener('submit', function (e) { e.preventDefault(); sendCheer($('inCheer').value); });
     $('btnRestack').addEventListener('click', function () {
       const mine = Store.myTower();
-      if (mine) startStacking(mine);
+      if (mine) restack(mine);
     });
     $('btnEditWish').addEventListener('click', function () { openWish('edit'); });
     if ($('btnDelTower')) {
@@ -879,6 +1130,7 @@
     refreshNet();
     // 서버에서 다른 사람의 돌탑을 받아 오면 캠퍼스·배지를 다시 그려요
     if (Store.onChange) Store.onChange(function () {
+      fixAutoName();
       refreshHud(); refreshNet(); renderAccountChip();
       if ($('mAccount') && $('mAccount').classList.contains('open')) renderAccount();
       // 열어 둔 돌탑이 사라졌으면(지움·계정 바뀜) 창을 닫아요

@@ -14,6 +14,9 @@
   // 플레이어 시작 위치(정문 바로 안쪽)
   const START = { x: 1200, y: 1870 };
 
+  // 다른 돌탑과 떨어져야 하는 최소 거리 (10px = 1m)
+  const TOWER_GAP = 30;
+
   // 소원 기원 게이지가 100%가 되는 층수
   const GAUGE_MAX = 15;
 
@@ -61,7 +64,20 @@
   ];
 
   // 캐릭터 색
-  const COLORS = ['#ff8a80', '#ffb74d', '#ffd54f', '#81c784', '#4fc3f7', '#7986cb', '#ba68c8', '#f48fb1'];
+  // 옷 색 (앞의 8개는 예전부터 쓰던 색이라 순서를 바꾸지 않아요)
+  const COLOR_GROUPS = [
+    { label: '기본', colors: [
+      ['#ff8a80', '코랄'], ['#ffb74d', '오렌지'], ['#ffd54f', '노랑'], ['#81c784', '초록'],
+      ['#4fc3f7', '하늘'], ['#7986cb', '파랑'], ['#ba68c8', '보라'], ['#f48fb1', '분홍']
+    ] },
+    { label: '뮤트톤', colors: [
+      ['#c08b8b', '더스티 로즈'], ['#b9785f', '테라코타'], ['#c2a45a', '머스터드'], ['#c9b79c', '샌드 베이지'],
+      ['#8a8f5c', '올리브'], ['#9cae94', '세이지'], ['#64806d', '딥 그린'], ['#7fa3a3', '더스티 민트'],
+      ['#8499b3', '더스티 블루'], ['#56647d', '슬레이트 네이비'], ['#a294b3', '라벤더 그레이'], ['#a0748f', '모브'],
+      ['#84545c', '버건디'], ['#8c7261', '모카'], ['#b5b1aa', '웜 그레이'], ['#62636a', '차콜']
+    ] }
+  ];
+  const COLORS = COLOR_GROUPS.reduce(function (all, g) { return all.concat(g.colors.map(function (c) { return c[0]; })); }, []);
 
   // 캐릭터 꾸미기: 헤어스타일 · 표정 (첫 번째가 기본값)
   const HAIRS = [
@@ -188,11 +204,13 @@
   window.DATA = {
     WORLD: WORLD,
     START: START,
+    TOWER_GAP: TOWER_GAP,
     GAUGE_MAX: GAUGE_MAX,
     PLACES: PLACES,
     ROADS: ROADS,
     CATEGORIES: CATEGORIES,
     COLORS: COLORS,
+    COLOR_GROUPS: COLOR_GROUPS,
     QUICK_CHEERS: QUICK_CHEERS,
     NPCS: NPCS,
     DEMO_TOWERS: DEMO_TOWERS,

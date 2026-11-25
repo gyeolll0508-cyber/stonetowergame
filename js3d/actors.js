@@ -4,7 +4,7 @@
  *  - 돌탑: 최고 기록(best)만큼 돌을 쌓아 보여 줘요(2D 지도와 같은 규칙).
  * ========================================================= */
 import * as THREE from 'three';
-import { toV3 } from './logic.js?v=2026112206';
+import { toV3 } from './logic.js?v=2026112501';
 import { glowTexture } from './textures.js?v=2026112206';
 import { paintStone } from './tones.js';
 
@@ -286,6 +286,91 @@ const snapMat = new THREE.MeshStandardMaterial({ color: 0xf2ece0, roughness: 0.4
 const pantsMat = new THREE.MeshStandardMaterial({ color: 0x3d4a6e, roughness: 0.85 });
 const shoeMat = new THREE.MeshStandardMaterial({ color: 0xfaf7f2, roughness: 0.7 });
 
+/* ---------------- 돌 쌓는 중인 사람 앞의 돌탑 ---------------- */
+
+const SITE_MAX = 30;   // 이보다 높이 쌓아도 그림은 여기까지만
+const siteSeedOf = function (id) {
+  let n = 0;
+  for (let i = 0; i < id.length; i++) n = (n * 31 + id.charCodeAt(i)) % 997;
+  return n;
+};
+
+/**
+ * 다른 접속자가 지금 쌓고 있는 돌탑 (캐릭터 앞에 놓여요)
+ * @returns { group, set(층수), update(dt), close(), done() }
+ */
+export function makeBuildSite(id) {
+  const seed = siteSeedOf(String(id));
+  const group = new THREE.Group();
+  const base = makeStone('base', seed);
+  base.scale.set(1.0, 0.24, 0.85);
+  base.position.y = 0.1;
+  group.add(base);
+  // 옆에 쌓아 둔 재료 돌 몇 개
+  [[-0.95, -0.35, 0.32], [-1.15, -0.02, 0.26], [-0.85, 0.02, 0.22]].forEach(function (q, i) {
+    const s = makeStone(MINI[(seed + i) % MINI.length], seed + i);
+    s.scale.set(q[2] * 1.3, q[2] * 0.75, q[2]);
+    s.position.set(q[0], q[2] * 0.32, q[1]);
+    s.rotation.y = seed + i * 2;
+    group.add(s);
+  });
+
+  const items = [], falling = [];
+  let first = true, closing = false, size = 1;
+
+  function addStone() {
+    const i = items.length;
+    const ty = STONES.byId(MINI[(i + seed) % MINI.length]);
+    const hh = ty.shape === 'oval' ? 0.24 : 0.2;
+    const w = Math.max(0.36, Math.min(ty.w / ty.h * hh, 0.82 - i * 0.02));
+    const mesh = makeStone(ty.id, i + seed);
+    mesh.scale.set(w, hh, w * 0.8);
+    mesh.rotation.y = i * 1.9 + seed;
+    const y0 = i ? items[i - 1].top : 0.2;
+    const it = { mesh: mesh, y: y0 + hh * 0.46, top: y0 + hh * 0.86, off: first ? 0 : 1.3, v: 0 };
+    mesh.position.set(Math.sin(i * 1.7 + seed) * 0.04, it.y + it.off, Math.cos(i * 1.3 + seed) * 0.04);
+    group.add(mesh);
+    items.push(it);
+  }
+
+  return {
+    group: group,
+    // 층수가 늘면 위에서 톡 떨어지고, 줄면(무너지면) 와르르 굴러떨어져요
+    set: function (n) {
+      n = Math.max(0, Math.min(SITE_MAX, n));
+      while (items.length < n) addStone();
+      while (items.length > n) {
+        const it = items.pop(), a = Math.random() * Math.PI * 2, sp = 0.6 + Math.random() * 1.2;
+        falling.push({ mesh: it.mesh, vx: Math.cos(a) * sp, vz: Math.sin(a) * sp, vy: 0.8 + Math.random(), life: 1, size: it.mesh.scale.clone() });
+      }
+      first = false;
+    },
+    update: function (dt) {
+      items.forEach(function (it) {
+        if (it.off <= 0) return;
+        it.v += 11 * dt;
+        it.off = Math.max(0, it.off - it.v * dt);
+        it.mesh.position.y = it.y + it.off;
+      });
+      for (let i = falling.length - 1; i >= 0; i--) {
+        const f = falling[i], p = f.mesh.position;
+        f.vy -= 9.8 * dt;
+        p.x += f.vx * dt; p.z += f.vz * dt;
+        p.y = Math.max(0.08, p.y + f.vy * dt);
+        if (p.y > 0.08) { f.mesh.rotation.x += f.vz * 4 * dt; f.mesh.rotation.z -= f.vx * 4 * dt; }
+        else { f.vx *= 0.9; f.vz *= 0.9; f.life -= dt * 0.9; f.mesh.scale.copy(f.size).multiplyScalar(Math.max(0.01, Math.min(1, f.life * 2))); }
+        if (f.life <= 0) { group.remove(f.mesh); falling.splice(i, 1); }
+      }
+      if (closing) {
+        size = Math.max(0, size - dt * 2.5);
+        group.scale.setScalar(Math.max(0.01, size));
+      }
+    },
+    close: function () { closing = true; },
+    done: function () { return closing && size <= 0; }
+  };
+}
+
 export function makeCharacter(color, look) {
   const root = new THREE.Group();
   const body = new THREE.Group(); // 걸을 때 통통 튀는 부분
@@ -437,11 +522,52 @@ export function makeCharacter(color, look) {
 
   meshes.forEach(function (m) { m.castShadow = true; });
 
+  /* ---- 돌 쌓는 동작: 옆의 돌을 집어서 → 번쩍 들고 → 앞에 올려놓기 (1.6초마다 반복) ---- */
+  let held = null;   // 손에 든 돌 (처음 쌓을 때 만들어요)
+  const ease = function (x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+  // 구간 a~b에서 0 → 1
+  const ramp = function (u, a, b) { return ease((u - a) / (b - a)); };
+
+  function buildPose(t) {
+    if (!held) {
+      held = makeStone('mong', 2);
+      held.scale.set(0.42, 0.24, 0.32);
+      body.add(held);
+    }
+    const u = (t / 1.6) % 1;
+    const bend = ramp(u, 0, 0.18) - ramp(u, 0.26, 0.46);     // 허리 숙이기
+    const lift = ramp(u, 0.26, 0.5) - ramp(u, 0.62, 0.78);   // 번쩍 들기
+    const put = ramp(u, 0.62, 0.78) - ramp(u, 0.88, 1);      // 앞에 놓기
+    const pick = ramp(u, 0, 0.22) - ramp(u, 0.3, 0.5);       // 아래로 손 뻗기
+    const arm = -(0.35 + pick * 0.55 + lift * 1.75 + put * 1.25);
+    const turn = bend * 0.55;                                // 재료 돌 쪽(왼쪽)으로 살짝
+    body.rotation.set(bend * 0.5 + put * 0.16 - lift * 0.06, -turn, Math.sin(t * 9) * 0.02);
+    body.position.y = -bend * 0.1 + lift * 0.05;
+    head.rotation.set(-lift * 0.25 + put * 0.12, 0, Math.sin(t * 4) * 0.05);
+    legs.forEach(function (l, i) { l.rotation.x = (i ? 1 : -1) * 0.16 * (bend + put); });
+    arms.forEach(function (a, i) {
+      a.rotation.x = arm;
+      a.rotation.z = (i ? 1 : -1) * 0.02;
+    });
+    held.visible = u > 0.2 && u < 0.8;
+    held.position.set(0, 0.86 - 0.46 * Math.cos(arm) + 0.06, -0.46 * Math.sin(arm) + 0.1);
+  }
+
+  function endBuildPose() {
+    held.visible = false;
+    body.rotation.x = body.rotation.y = head.rotation.x = 0;
+    arms.forEach(function (a, i) { a.rotation.z = (i ? 1 : -1) * 0.4; });
+  }
+  let building = false;
+
   return {
     root: root,
     setColor: function (c) { jacketMat.color.set(c); },
     setLook: setLook,
-    animate: function (walkTime, moving) {
+    // buildTime: 돌 쌓는 중이면 시각(초), 아니면 null
+    animate: function (walkTime, moving, buildTime) {
+      if (buildTime != null) { building = true; buildPose(buildTime); return; }
+      if (building) { building = false; endBuildPose(); }
       if (moving) {
         const s = Math.sin(walkTime * 11);
         body.position.y = Math.abs(s) * 0.08;

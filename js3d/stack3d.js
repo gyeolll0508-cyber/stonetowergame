@@ -8,7 +8,7 @@
  *  난이도: 높을수록 빨라지고, 4층부터 바람, 12층부터 손떨림.
  * ========================================================= */
 import * as THREE from 'three';
-import { makeStone, noise } from './actors.js?v=2026112206';
+import { makeStone, noise } from './actors.js?v=2026112502';
 import { TONES, validTone, paintStone } from './tones.js';
 import Bgm from './bgm.js';
 import * as TX from './textures.js?v=2026112206';
@@ -35,6 +35,14 @@ let vw = 0, vh = 0, bottomPad = 160, topPad = 80;
 const view = { y: 1, dist: 10 };
 
 let tower = null, onClose = null;
+/* 친구와 번갈아 쌓기 (coop.js) — 혼자 쌓을 땐 null
+ *  { host 돌탑 주인인지, name 상대 이름, send, leave, round 몇 번째 판,
+ *    remote 지금 돌이 상대 돌인지, A 상대 화면의 좌우 폭, pend 상대 돌의 착지 정보,
+ *    doneN 마지막으로 착지한 층 번호, ld 상대가 확인할 때까지 다시 보낼 착지 신호 }
+ *  - n층째 돌은 n이 짝수면 주인, 홀수면 친구 차례예요(0부터).
+ *  - 차례인 사람 화면이 기준: 떨어진 위치(x)를 보내면 상대도 같은 판정으로 쌓아요. */
+let coop = null;
+function myTurn() { return !coop || (height() % 2 === 0) === coop.host; }
 let stack = [];            // {type, x, yb(아랫면 y, 위쪽이 음수), seed, mesh}
 let selected = 'flat';
 let state = 'hover';       // hover → falling → (hover | collapse | miss) → result
@@ -44,7 +52,9 @@ let wind = 0;
 let debris = [], dust = [], popups = [], leaves = [];
 let minMargin = 1;
 let endTimer = 0, endReason = '', endHeight = 0;
-let recorded = false, reached15 = false, seedNo = 1, dropped = false;
+let recorded = false, reached15 = false, seedNo = 1;
+const TIP_MS = 5000;   // '화면을 탭하면…' 안내가 보이는 시간
+let tipTimer = 0;
 let starTag = null;
 
 /* ---------------- 균형 계산 (2D와 동일) ---------------- */
@@ -167,11 +177,8 @@ function moverMesh() {
   return m;
 }
 
-// 돌 종류는 매번 무작위로 바뀌어요 (고를 수 없음)
-function randomType() {
-  const list = STONES.TYPES;
-  return list[Math.floor(Math.random() * list.length)].id;
-}
+// 돌 종류는 매번 무작위로 바뀌어요 (고를 수 없음). 층별 비율은 stones.js에 있어요
+function randomType() { return STONES.pick(height() + 1); }
 
 function newMover() {
   selected = randomType();
@@ -202,15 +209,31 @@ function omega() { return Math.min(1.5 + height() * 0.13, 4.2); }
 
 function tremor() { return height() >= TREMOR_FROM ? (height() - TREMOR_FROM + 1) * 0.9 : 0; }
 
+// 다음 돌 준비: 내 차례면 돌을 꺼내고, 친구 차례면 친구 돌이 올 때까지 기다려요
+function nextTurn() {
+  if (!myTurn()) {
+    wind = 0; mover = null; state = 'wait';
+    markTray('');
+    updateHud();
+    return;
+  }
+  rollWind();
+  state = 'hover';
+  newMover();
+  if (coop) { coop.remote = false; sendMover(); }
+  updateHud();
+}
+
 function drop() {
-  if (state !== 'hover' || !mover) return;
+  if (state !== 'hover' || !mover || (coop && coop.remote)) return;
   state = 'falling';
   mover.vy = 0;
   if (tremor()) mover.x += (Math.random() - 0.5) * tremor();
-  if (!dropped) { dropped = true; el.tip.classList.add('hide'); }
+  if (coop) { coop.dropX = mover.x; sendMover(); }
 }
 
 function land() {
+  if (coop) landed();
   const top = stack[stack.length - 1];
   const c = contact(top, mover);
   mover.yb = topY();
@@ -257,10 +280,7 @@ function land() {
   }
   if (height() === WIND_FROM) popup('🍃 바람이 불기 시작해요', 0, lt.yb - lt.type.h - 80, '#3f7cc0');
   if (height() === TREMOR_FROM) popup('🫨 손이 떨리기 시작해요', 0, lt.yb - lt.type.h - 80, '#b4645f');
-  rollWind();
-  state = 'hover';
-  newMover();
-  updateHud();
+  nextTurn();
 }
 
 function toDebris(s, dir, power) {
@@ -284,9 +304,15 @@ function startEnd(reason) {
 
 function showResult(reason) {
   state = 'result';
-  const h = reason === 'finish' ? height() : endHeight;
+  endReason = reason;
+  const h = reason === 'finish' ? (coop && !coop.host && coop.finH != null ? coop.finH : height()) : endHeight;
   let res = { best: tower.best, isRecord: false };
-  if (!recorded) {
+  const guest = !!coop && !coop.host;   // 도와주러 온 친구 화면 — 기록은 주인 돌탑에만 남아요
+  if (guest) {
+    res = { best: Math.max(tower.best, h), isRecord: false };
+    tower.best = res.best;
+    recorded = true;
+  } else if (!recorded) {
     res = h > 0 ? Store.recordHeight(tower.id, h) : { best: tower.best, isRecord: false };
     recorded = true;
   }
@@ -304,6 +330,8 @@ function showResult(reason) {
   }
   if (res.isRecord) emoji = res.best >= DATA.GAUGE_MAX ? '🌟' : '🏆';
   if (h === 0 && reason !== 'finish') note += ' (0층은 기록되지 않아요)';
+  if (guest) note = '🤝 ' + coop.name + '님의 돌탑 쌓기를 도왔어요! 기록은 ' + coop.name + '님 돌탑에 남아요. 주인이 다시 도전하면 자동으로 이어져요.';
+  else if (coop) note += ' 🤝 ' + coop.name + '님과 함께 쌓았어요.';
   if (reason === 'finish' && h > 0) Bgm.sfx('success'); // 돌탑 완성 효과음
   el.rsEmoji.textContent = emoji;
   el.rsTitle.textContent = title;
@@ -313,15 +341,18 @@ function showResult(reason) {
   el.rsGaugeFill.style.width = gauge.pct + '%';
   el.rsGaugeLabel.textContent = gauge.label;
   el.rsNote.textContent = note;
-  el.rsDecorate.hidden = stack.length + debris.length < 2; // 꾸밀 돌이 있을 때만
+  el.rsDecorate.hidden = guest || stack.length + debris.length < 2; // 꾸밀 돌이 있을 때만 (주인만)
+  el.rsRetry.hidden = guest;
   el.result.hidden = false;
   el.skBest.textContent = res.best;
   if (mover) { disposeMesh(mover.mesh); mover = null; }
-  setTimeout(function () { el.rsRetry.focus(); }, 50);
+  if (coop) { coop.remote = false; coop.pend = null; updateHud(); if (coop.host) coop.send(Object.assign({ k: 'hb' }, Stack.coopBeat())); }
+  setTimeout(function () { (guest ? el.rsExit : el.rsRetry).focus(); }, 50);
 }
 
 function finish() {
-  if (state !== 'hover') return;
+  if (coop && !coop.host) return;
+  if (state !== 'hover' && state !== 'wait') return;
   if (height() === 0) { toast('돌을 하나 이상 쌓아 주세요 🪨'); return; }
   showResult('finish');
 }
@@ -363,7 +394,7 @@ function update(dt) {
   time += dt;
   if (state === 'hover' && mover) {
     phase += omega() * dt;
-    const A = amplitude();
+    const A = coop && coop.remote ? coop.A : amplitude();
     let x = Math.sin(phase) * A;
     const tr = tremor();
     if (tr) x += (Math.sin(time * 31) + Math.sin(time * 17.3)) * 0.5 * tr;
@@ -373,7 +404,11 @@ function update(dt) {
     mover.vy += G * dt;
     mover.yb += mover.vy * dt;
     mover.x += wind * 0.8 * dt;
-    if (mover.yb >= topY()) land();
+    if (mover.yb >= topY()) {
+      if (!(coop && coop.remote)) land();
+      else if (coop.pend) { mover.x = coop.pend.x; land(); }   // 친구가 알려 준 정확한 자리에 착지
+      else mover.yb = topY();                                  // 착지 신호를 기다려요
+    }
   }
 
   debris.forEach(function (d) {
@@ -480,7 +515,7 @@ function toScreen(xpx, ypx, out) {
 
 function draw() {
   // 흔들림: 균형이 아슬아슬할수록 탑이 살짝 흔들려요 (2D와 동일)
-  const sway = (state === 'hover' || state === 'falling') ? Math.max(0, 0.35 - minMargin) * 0.05 * Math.sin(time * 3.2) : 0;
+  const sway = (state === 'hover' || state === 'falling' || state === 'wait') ? Math.max(0, 0.35 - minMargin) * 0.05 * Math.sin(time * 3.2) : 0;
   stackGroup.rotation.z = -sway;
 
   // 움직이는 돌 + 낙하 안내선 + 착지 표시
@@ -688,6 +723,7 @@ function buildScene() {
 
 function updateHud() {
   const h = height();
+  renderTurn();
   Bgm.setLevel(h); // 돌탑 높이에 따라 배경음악 단계(1~3층 / 4~6층 / 7층~)
   el.skHeight.textContent = h;
   el.skBest.textContent = Math.max(tower.best, 0);
@@ -704,6 +740,137 @@ function updateHud() {
   const pct = Math.max(0, Math.min(1, minMargin)) * 100;
   el.skStab.style.width = pct + '%';
   el.skStab.className = pct > 50 ? 'ok' : pct > 22 ? 'warn' : 'danger';
+}
+
+/* ---------------- 친구와 번갈아 쌓기 ---------------- */
+
+function renderTurn() {
+  const t = el.turn;
+  if (!coop || state === 'result' || state === 'collapse' || state === 'miss') { t.hidden = true; return; }
+  const mine = myTurn();
+  t.hidden = false;
+  t.classList.toggle('mine', mine);
+  t.textContent = mine ? '🙋 내 차례예요!' : '🤝 ' + coop.name + '님 차례예요';
+}
+
+// 지금 내가 움직이는 돌을 상대에게 알려요
+function sendMover() {
+  if (!coop || coop.remote || !mover || (state !== 'hover' && state !== 'falling')) return;
+  coop.send({
+    k: 'mv', r: coop.round, n: height(), t: mover.type.id, s: mover.seed, w: wind,
+    p: phase, A: amplitude(), f: state === 'falling' ? 1 : 0, x: state === 'falling' ? coop.dropX : mover.x
+  });
+}
+
+// 돌이 착지하는 순간: 내 돌이면 자리를 보내고, 상대 돌이면 받았다고 알려요
+function landed() {
+  const n = height();
+  coop.doneN = n;
+  if (coop.remote) {
+    coop.send({ k: 'ak', r: coop.round, n: n });
+  } else {
+    coop.ld = { k: 'ld', r: coop.round, n: n, t: mover.type.id, s: mover.seed, x: mover.x };
+    coop.send(Object.assign({}, coop.ld));
+  }
+  coop.remote = false;
+  coop.pend = null;
+}
+
+function finite(v, lo, hi) { return typeof v === 'number' && isFinite(v) && v >= lo && v <= hi; }
+
+// 상대 돌을 화면에 꺼내요
+function remoteMover(m) {
+  if (mover) return;
+  mover = { type: typeOf(m.t), x: 0, yb: topY() - HOVER_GAP, vy: 0, seed: m.s };
+  mover.mesh = moverMesh();
+  markTray(m.t);
+  coop.remote = true;
+  coop.A = 165;
+  wind = 0;
+  state = 'hover';
+}
+
+function coopRecv(m) {
+  if (!coop) return;
+  if (!finite(m.r, 0, 9999)) return;
+  // 주인이 다시 도전하면 친구 화면도 새 판으로
+  if (!coop.host && m.r > coop.round) { coop.round = m.r; reset(); }
+  if (m.k === 'ak') {
+    if (coop.ld && m.r === coop.ld.r && m.n === coop.ld.n) coop.ld = null;
+    return;
+  }
+  if (m.k === 'hb') {
+    if (!coop.host && m.r === coop.round && m.fin && state !== 'result' && finite(m.h, 0, 999)) {
+      coop.finH = m.h;
+      showResult('finish');
+    }
+    return;
+  }
+  if (m.k !== 'mv' && m.k !== 'ld') return;
+  if (!finite(m.n, 0, 9999) || !finite(m.s, 0, 1e7) || !finite(m.x, -900, 900) ||
+    !STONES.TYPES.some(function (t) { return t.id === m.t; })) return;
+  // 이미 처리한(또는 지난 판·끝난 판의) 착지 신호는 받았다고만 다시 알려요
+  if (m.k === 'ld' && (m.r < coop.round || (m.r === coop.round && (m.n <= coop.doneN || state === 'result')))) {
+    coop.send({ k: 'ak', r: m.r, n: m.n });
+    return;
+  }
+  if (m.r !== coop.round || m.n !== height() || myTurn()) return;
+  if (state !== 'wait' && !(coop.remote && (state === 'hover' || state === 'falling'))) return;
+  const first = !mover;
+  remoteMover(m);
+  if (m.k === 'mv') {
+    if (finite(m.w, -200, 200)) wind = m.w;
+    if (finite(m.A, 20, 200)) coop.A = m.A;
+    if (state === 'hover' && finite(m.p, 0, 1e6)) {
+      const err = m.p - phase;
+      phase = first || Math.abs(err) > 1 ? m.p : phase + err * 0.5;
+    }
+    if (m.f && state === 'hover') { mover.x = m.x; mover.vy = 0; state = 'falling'; }
+  } else {
+    coop.pend = { x: m.x };
+    if (state === 'hover') { mover.vy = 400; state = 'falling'; }
+  }
+  if (first) updateHud();
+}
+
+// 상대가 나갔거나 연결이 끊겼을 때
+function coopLost(why, name) {
+  if (!coop) return;
+  const wasHost = coop.host, remote = coop.remote;
+  const text = why === 'left' ? name + '님이 나갔어요.' : name + '님과 연결이 끊겼어요.';
+  if (!wasHost) {
+    toast('👋 ' + text + ' 도와줘서 고마워요!');
+    coop.leave = function () {};   // 이미 끝난 연결이라 알릴 필요가 없어요
+    if (running) close();
+    return;
+  }
+  coop = null;
+  toast('👋 ' + text + ' 이어서 혼자 쌓을 수 있어요');
+  if (!running) return;
+  if (state === 'wait' || remote) {
+    if (mover) { disposeMesh(mover.mesh); mover = null; }
+    nextTurn();
+  }
+  coopButtons();
+  resize();
+  updateHud();
+}
+
+// 주인/친구에 따라 버튼 바꾸기
+function coopButtons() {
+  const guest = !!coop && !coop.host;
+  $('skFinish').hidden = guest;
+  $('skExit').textContent = guest ? '← 그만 돕기' : '← 캠퍼스로';
+  el.rsRetry.hidden = guest;
+}
+
+// 다시 도전 (함께 쌓을 땐 주인만, 친구 화면도 같이 새 판이 돼요)
+function retry() {
+  if (coop) {
+    if (!coop.host) return;
+    coop.round++;
+  }
+  reset();
 }
 
 function buildTray() {
@@ -750,7 +917,7 @@ function resize() {
   vw = window.innerWidth; vh = window.innerHeight;
   renderer.setSize(vw, vh);
   bottomPad = ((decorating ? el.decor : el.bottom).offsetHeight || 150) + 10;
-  topPad = (el.scene.querySelector('.stack-hud').offsetHeight || 60) + 30;
+  topPad = (el.scene.querySelector('.stack-hud').offsetHeight || 60) + 30 + (coop ? 70 : 0);   // 함께 쌓을 땐 차례 배너 자리만큼 더
   camera.aspect = vw / vh;
   // HUD와 돌 트레이 사이 빈 공간의 가운데에 탑이 오게 화면 중심을 옮겨요
   camera.setViewOffset(vw, vh, 0, Math.round((bottomPad - topPad) / 2), vw, vh);
@@ -784,24 +951,32 @@ function reset() {
   stackGroup.add(base.mesh);
   place(base.mesh, 0, -BASE.h / 2);
   stack = [base];
-  wind = 0; minMargin = 1; phase = 0; recorded = false; dropped = false;
+  wind = 0; minMargin = 1; phase = 0; recorded = false;
   reached15 = tower.best >= DATA.GAUGE_MAX;
-  state = 'hover';
-  newMover();
+  if (coop) { coop.remote = false; coop.pend = null; coop.ld = null; coop.doneN = -1; coop.finH = null; }
+  nextTurn();
   view.y = -topY() * K + HOVER_GAP * K * 0.15;
   el.result.hidden = true;
-  el.tip.classList.remove('hide');
+  // 안내는 5초 뒤에 저절로 사라져요 (돌을 떨어뜨려도 그대로)
+  clearTimeout(tipTimer);
+  el.tip.classList.toggle('hide', !!coop && !coop.host);   // 친구는 자기 차례가 아니라서 안 보여요
+  tipTimer = setTimeout(function () { el.tip.classList.add('hide'); }, TIP_MS);
   updateHud();
 }
 
 function close() {
   // 쌓던 중에 나가면 지금 높이를 조용히 기록
   let info = { height: 0, isRecord: false };
-  if (!recorded && (state === 'hover' || state === 'falling') && height() > 0) {
+  const guest = !!coop && !coop.host;
+  if (guest) info = { height: 0, isRecord: false, helped: coop.name };
+  else if (!recorded && (state === 'hover' || state === 'falling' || state === 'wait') && height() > 0) {
     const r = Store.recordHeight(tower.id, height());
     info = { height: height(), isRecord: r.isRecord };
     recorded = true;
   }
+  const co = coop;
+  coop = null;
+  if (co) co.leave();
   running = false;
   cancelAnimationFrame(rafId);
   Bgm.play('campus'); // 캠퍼스로 돌아가면 돌탑 음악 → 캠퍼스 음악 (자연스럽게 교차)
@@ -823,7 +998,7 @@ function onKey(e) {
     return;
   }
   if (state === 'result') {
-    if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); reset(); }
+    if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); retry(); }
     else if (e.code === 'Escape') close();
     return;
   }
@@ -835,7 +1010,7 @@ function init() {
   el = {
     scene: $('stackScene'), canvas: $('stackCanvas'), tray: $('skTray'), bottom: $('skBottom'),
     skHeight: $('skHeight'), skBest: $('skBest'), skLevel: $('skLevel'), skWind: $('skWind'), skStab: $('skStab'),
-    wish: $('skWish'), tip: $('skTip'), result: $('skResult'),
+    wish: $('skWish'), tip: $('skTip'), result: $('skResult'), turn: $('skTurn'),
     rsEmoji: $('rsEmoji'), rsTitle: $('rsTitle'), rsHeight: $('rsHeight'), rsBest: $('rsBest'), rsRecord: $('rsRecord'),
     rsGaugeFill: $('rsGaugeFill'), rsGaugeLabel: $('rsGaugeLabel'), rsNote: $('rsNote'), rsRetry: $('rsRetry'), rsExit: $('rsExit'),
     rsDecorate: $('rsDecorate'), decor: $('skDecor'), tones: $('skTones')
@@ -865,7 +1040,7 @@ function init() {
   el.canvas.addEventListener('pointerdown', function (e) { e.preventDefault(); drop(); });
   $('skFinish').addEventListener('click', finish);
   $('skExit').addEventListener('click', close);
-  el.rsRetry.addEventListener('click', reset);
+  el.rsRetry.addEventListener('click', retry);
   el.rsExit.addEventListener('click', close);
   el.rsDecorate.addEventListener('click', openDecor);
   $('skDecorDone').addEventListener('click', closeDecor);
@@ -887,8 +1062,10 @@ const Stack = {
    * @param t  쌓을 돌탑(Store의 tower 객체)
    * @param cb 끝나고 캠퍼스로 돌아갈 때 호출 (info: {height, isRecord})
    */
-  start: function (t, cb) {
+  start: function (t, cb, net) {
     if (!el) init();
+    coop = net ? { host: !!net.host, name: net.partner, send: net.send, leave: net.leave, round: 0, remote: false, A: 165, pend: null, doneN: -1, ld: null, finH: null } : null;
+    coopButtons();
     tower = t;
     onClose = cb;
     const cat = DATA.category(t.cat);
@@ -904,6 +1081,25 @@ const Stack = {
     Bgm.play('stack'); // 캠퍼스 음악 → 돌탑 음악 (버튼 클릭으로 열리므로 자동재생 제한 없음, OFF면 재생 안 함)
   },
   isActive: function () { return running; },
+  /* ---- 친구와 번갈아 쌓기 (coop.js에서 호출) ----
+   *  start(t, cb, { host, partner, send, leave }) 로 시작해요 */
+  canCoop: true,
+  coopRecv: function (m) { if (running) coopRecv(m); },
+  coopLost: coopLost,
+  // 0.4초마다: 움직이는 돌 알리기 · 확인 못 받은 착지 다시 보내기
+  coopTick: function () {
+    if (!coop || !running) return;
+    if (coop.ld) coop.send(Object.assign({}, coop.ld));
+    sendMover();
+  },
+  // 살아 있다는 신호에 붙일 내용
+  coopBeat: function () {
+    if (!coop) return null;
+    const fin = coop.host && state === 'result' && endReason === 'finish';
+    return { r: coop.round, fin: fin ? 1 : 0, h: fin ? height() : 0 };
+  },
+  // 지금 쌓아 올린 층수 (쌓는 중이 아니면 -1) — 다른 사람 화면에 보여 줄 때 써요
+  progress: function () { return running ? Math.max(0, height()) : -1; },
   // 테스트용(읽기 전용): 배경음악 상태
   bgm: function () { return Bgm.debug(); },
   // 테스트·디버그용(읽기 전용) 상태 확인
@@ -911,6 +1107,8 @@ const Stack = {
     return {
       state: state, x: mover ? mover.x : null, height: height(), margin: minMargin, wind: wind, debris: debris.length,
       tone: tone, decorating: decorating,
+      coop: coop ? { host: coop.host, turn: myTurn(), remote: coop.remote, round: coop.round, wait: !!coop.ld } : null,
+      stack: stack.map(function (s) { return s.type.id + '@' + s.x; }),
       colors: stack.map(function (s) { return '#' + s.mesh.material.color.getHexString(); })
     };
   }
